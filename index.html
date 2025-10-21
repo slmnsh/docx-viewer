@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DOCX Viewer - Fixed Tree & Actions</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.js"></script>
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        background: #1e1e1e;
+        color: #d4d4d4;
+      }
+      #viewerContainer {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #fileTreeContainer {
+        width: 280px;
+        background: #252526;
+        color: #d4d4d4;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #333;
+        padding-top: 10px;
+        box-sizing: border-box;
+        position: relative;
+      }
+      #fileTreeContainer header {
+        display: flex;
+        gap: 10px;
+        margin-inline: 10px;
+      }
+      #uploadBtn {
+        background: #0e639c;
+        color: #fff;
+        border: none;
+        padding: 4px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        width: max-content;
+        text-wrap: nowrap;
+      }
+      #uploadBtn:hover {
+        background: #1177bb;
+      }
+      #fileSearch {
+        padding: 4px;
+        font-size: 12px;
+        width: calc(100% - 20px);
+        border-radius: 3px;
+        border: none;
+        background: #333;
+        color: #d4d4d4;
+      }
+      #fileTree {
+        margin-top: 5px;
+        overflow: auto;
+        flex: 1;
+      }
+      ul {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+      }
+      li {
+        cursor: pointer;
+        border-radius: 2px;
+        font-size: 13px;
+        margin: 1px 0;
+      }
+      li .labelContainer:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      li.selected {
+        background: rgba(0, 122, 204, 0.4);
+      }
+
+      /* Label row with flex for name + actions */
+      li > .labelContainer {
+        display: flex;
+        align-items: center;
+        padding: 2px 10px;
+      }
+
+      /* Nested folder list */
+      li > ul {
+        display: none;
+        padding-left: 15px;
+        margin: 0;
+      }
+
+      /* Material Icons */
+      .folder .labelContainer::before,
+      .file .labelContainer::before {
+        font-family: "Material Icons";
+        font-style: normal;
+        font-weight: normal;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 5px;
+        font-size: 16px;
+      }
+      .folder > .labelContainer::before {
+        content: "folder";
+        color: #9cdcfe;
+      }
+      .folder:not(.collapsed) > .labelContainer::before {
+        content: "folder_open";
+      }
+
+      .file-image > .labelContainer::before {
+        content: "image";
+        color: #b5cea8;
+      } /* images */
+      .file-xml > .labelContainer::before {
+        content: "code";
+        color: #dcdcaa;
+      } /* XML files */
+      .file-text > .labelContainer::before {
+        content: "article";
+        color: #9cdcfe;
+      } /* plain text */
+      .file-font > .labelContainer::before {
+        content: "font_download";
+        color: #c586c0;
+      } /* fonts */
+      .file-default > .labelContainer::before {
+        content: "insert_drive_file";
+        color: #d4d4d4;
+      } /* other files */
+
+      /* Three-dot menu */
+      .fileActionsMenu {
+        position: relative;
+        display: inline-block;
+        margin-left: auto;
+      }
+      .fileActionsDropdown {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        background: #252526;
+        border: 1px solid #333;
+        border-radius: 3px;
+        z-index: 100;
+        min-width: 80px;
+        font-size: 12px;
+      }
+      .fileActionsDropdown button {
+        display: block;
+        width: 100%;
+        padding: 4px 6px;
+        text-align: left;
+        border: none;
+        background: none;
+        color: #d4d4d4;
+        cursor: pointer;
+      }
+      .fileActionsDropdown button:hover {
+        background: #3e3e3e;
+      }
+      .fileActionsMenu.open .fileActionsDropdown {
+        display: block;
+      }
+
+      #editorWrapper {
+        flex: 1;
+        position: relative;
+      }
+      #editorContainer {
+        width: 100%;
+        height: 100%;
+      }
+      #editorLoading {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(30, 30, 30, 0.8);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 16px;
+        z-index: 10;
+        display: none;
+      }
+
+      /* Full-screen overlay */
+      #fullScreenOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(30, 30, 30, 0.95);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 9999;
+        flex-direction: column;
+        cursor: pointer;
+      }
+      #fullScreenOverlay h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+      #fullScreenOverlay p {
+        margin: 5px 0;
+        font-size: 16px;
+      }
+      #fullScreenOverlay span {
+        font-size: 12px;
+        color: #9cdcfe;
+        margin-top: 8px;
+      }
+      #fullScreenOverlay:hover {
+        background: rgba(40, 40, 40, 0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="viewerHeader"
+      style="
+        padding: 5px 10px;
+        background: #252526;
+        color: #d4d4d4;
+        font-size: 14px;
+        border-bottom: 1px solid #333;
+      "
+    >
+      No file selected
+    </div>
+    <div id="viewerContainer">
+      <div id="fileTreeContainer">
+        <header>
+          <input id="fileSearch" type="text" placeholder="Search files..." />
+          <button id="uploadBtn">Upload File</button>
+        </header>
+        <div id="fileTree"></div>
+      </div>
+      <div id="editorWrapper">
+        <div id="editorLoading">Loading...</div>
+        <div id="editorContainer"></div>
+        <div
+          id="imageContainer"
+          style="
+            display: none;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            align-items: center;
+          "
+        >
+          <img
+            id="docxImage"
+            src=""
+            style="max-width: 100%; max-height: 100%; object-fit: contain"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div id="fullScreenOverlay">
+      <h2>Welcome</h2>
+      <p>Click or drag a DOCX file anywhere to start</p>
+      <span>Supported: .docx</span>
+    </div>
+
+    <script>
+      const fileTreeDiv = document.getElementById("fileTree");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const fileSearch = document.getElementById("fileSearch");
+      const editorContainer = document.getElementById("editorContainer");
+      const editorLoading = document.getElementById("editorLoading");
+      const fullScreenOverlay = document.getElementById("fullScreenOverlay");
+      const imageContainer = document.getElementById("imageContainer");
+      const docxImage = document.getElementById("docxImage");
+      const editorHeader = document.getElementById("viewerHeader");
+
+      function setActiveFileHeader(filename) {
+        editorHeader.textContent = filename || "No file selected";
+      }
+
+      let zipFilesMap = {};
+      let monacoEditor;
+      let xmlWorker;
+      const fileCache = {};
+      let selectedFileLi = null;
+
+      // Supported image extensions
+      const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp"];
+      function isImageFile(path) {
+        const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+        return imageExtensions.includes(ext);
+      }
+
+      /* -------------------- IndexedDB -------------------- */
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("docxViewerDB", 1);
+          request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("files"))
+              db.createObjectStore("files", { keyPath: "path" });
+          };
+          request.onsuccess = (e) => resolve(e.target.result);
+          request.onerror = (e) => reject(e.target.error);
+        });
+      }
+
+      async function saveFileToDB(path, content) {
+        const db = await openDB();
+        const tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").put({ path, content });
+        return new Promise((resolve) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        });
+      }
+
+      async function loadFileFromDB(path) {
+        const db = await openDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction("files", "readonly");
+          const req = tx.objectStore("files").get(path);
+          req.onsuccess = () => resolve(req.result?.content || null);
+          req.onerror = () => resolve(null);
+        });
+      }
+
+      /* -------------------- File Input / Drag Drop -------------------- */
+      const hiddenInput = document.createElement("input");
+      hiddenInput.type = "file";
+      hiddenInput.accept = ".docx";
+      hiddenInput.style.display = "none";
+      document.body.appendChild(hiddenInput);
+
+      uploadBtn.addEventListener("click", () => {
+        hiddenInput.value = "";
+        hiddenInput.click();
+      });
+      hiddenInput.addEventListener("change", (e) => {
+        handleFile(e.target.files[0]);
+        fullScreenOverlay.style.display = "none";
+      });
+      fullScreenOverlay.addEventListener("click", () => {
+        hiddenInput.value = "";
+        hiddenInput.click();
+      });
+
+      ["dragover", "drop"].forEach((evt) => {
+        document.addEventListener(evt, (e) => e.preventDefault());
+      });
+      fullScreenOverlay.addEventListener("drop", (e) => {
+        handleFile(e.dataTransfer.files[0]);
+        fullScreenOverlay.style.display = "none";
+      });
+      fullScreenOverlay.addEventListener("dragover", (e) => {
+        fullScreenOverlay.style.background = "rgba(40,40,40,0.95)";
+      });
+      fullScreenOverlay.addEventListener("dragleave", (e) => {
+        fullScreenOverlay.style.background = "rgba(30,30,30,0.95)";
+      });
+
+      /* -------------------- DOCX Loading -------------------- */
+      async function handleFile(file) {
+        if (!file) return;
+        const zip = await JSZip.loadAsync(file);
+        zipFilesMap = {};
+        Object.keys(zip.files).forEach((path) => {
+          if (!zip.files[path].dir) zipFilesMap[path] = zip.files[path];
+        });
+        const tree = buildTree(Object.keys(zipFilesMap));
+        fileTreeDiv.innerHTML = "";
+        fileTreeDiv.appendChild(renderTree(tree));
+        setActiveFileHeader(file.name);
+        if (monacoEditor) monacoEditor.setValue("");
+      }
+
+      function buildTree(files) {
+        const root = {};
+        files.forEach((path) => {
+          const parts = path.split("/");
+          let cur = root;
+          parts.forEach((part, idx) => {
+            cur[part] = cur[part] || (idx === parts.length - 1 ? null : {});
+            cur = cur[part] || {};
+          });
+        });
+        return root;
+      }
+
+      function getFileClass(path) {
+        if (isImageFile(path)) return "file file-image";
+        if (path.endsWith(".xml")) return "file file-xml";
+        if (path.endsWith(".txt")) return "file file-text";
+        if (path.match(/\.(ttf|otf|woff|woff2)$/i)) return "file file-font";
+        return "file file-default";
+      }
+
+      /* -------------------- File Tree Rendering -------------------- */
+      function renderTree(obj, path = "") {
+        const ul = document.createElement("ul");
+        Object.keys(obj)
+          .sort((a, b) => {
+            const aF = obj[a] !== null,
+              bF = obj[b] !== null;
+            if (aF && !bF) return -1;
+            if (!aF && bF) return 1;
+            return a.localeCompare(b);
+          })
+          .forEach((key) => {
+            const fullPath = path ? path + "/" + key : key;
+            const li = document.createElement("li");
+
+            const labelDiv = document.createElement("div");
+            labelDiv.className = "labelContainer";
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = key;
+            nameSpan.className = "fileName";
+            labelDiv.appendChild(nameSpan);
+
+            li.appendChild(labelDiv);
+            if (obj[key]) {
+              li.className = "folder collapsed";
+              const childUl = renderTree(obj[key], fullPath);
+              li.appendChild(childUl);
+              labelDiv.addEventListener("click", (e) => {
+                e.stopPropagation();
+                li.classList.toggle("collapsed");
+                childUl.style.display = li.classList.contains("collapsed")
+                  ? "none"
+                  : "block";
+              });
+            } else {
+              li.className = getFileClass(fullPath);
+
+              // Three-dot menu
+              const actionsDiv = document.createElement("div");
+              actionsDiv.className = "fileActionsMenu";
+              const toggle = document.createElement("span");
+              toggle.textContent = "⋮";
+              toggle.className = "menuToggle";
+              const dropdown = document.createElement("div");
+              dropdown.className = "fileActionsDropdown";
+              const copyBtn = document.createElement("button");
+              copyBtn.textContent = "Copy Path";
+              const downloadBtn = document.createElement("button");
+              downloadBtn.textContent = "Download";
+              dropdown.appendChild(copyBtn);
+              dropdown.appendChild(downloadBtn);
+              actionsDiv.appendChild(toggle);
+              actionsDiv.appendChild(dropdown);
+              labelDiv.appendChild(actionsDiv);
+
+              toggle.addEventListener("click", (e) => {
+                e.stopPropagation();
+                actionsDiv.classList.toggle("open");
+              });
+              copyBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(fullPath);
+                actionsDiv.classList.remove("open");
+              });
+              downloadBtn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const fd = zipFilesMap[fullPath];
+                if (!fd) return;
+                const blob = await fd.async("blob");
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = fullPath.split("/").pop();
+                a.click();
+                actionsDiv.classList.remove("open");
+              });
+
+              labelDiv.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                if (selectedFileLi) selectedFileLi.classList.remove("selected");
+                li.classList.add("selected");
+                selectedFileLi = li;
+
+                const fd = zipFilesMap[fullPath];
+                if (!fd) return;
+
+                // Handle images
+                if (isImageFile(fullPath)) {
+                  const blob = await fd.async("blob");
+                  const url = URL.createObjectURL(blob);
+
+                  // Hide Monaco, show image container
+                  editorContainer.style.display = "none";
+                  imageContainer.style.display = "flex";
+                  docxImage.src = url;
+                  return;
+                }
+
+                // Check in-memory cache
+                if (fileCache[fullPath]) {
+                  displayFileInMonaco(
+                    fileCache[fullPath],
+                    fullPath.endsWith(".xml") ? "xml" : "plaintext",
+                  );
+                  return;
+                }
+
+                // Check IndexedDB
+                const cached = await loadFileFromDB(fullPath);
+                if (cached) {
+                  fileCache[fullPath] = cached;
+                  displayFileInMonaco(
+                    cached,
+                    fullPath.endsWith(".xml") ? "xml" : "plaintext",
+                  );
+                  return;
+                }
+
+                // Load file content
+                const text = await fd.async("text");
+                if (fullPath.endsWith(".xml")) {
+                  showLoading();
+                  xmlWorker.postMessage({ text, path: fullPath });
+                } else {
+                  displayFileInMonaco(text, "plaintext");
+                  fileCache[fullPath] = text;
+                  saveFileToDB(fullPath, text);
+                }
+              });
+            }
+            ul.appendChild(li);
+          });
+        return ul;
+      }
+
+      /* -------------------- Recursive Search -------------------- */
+      function filterTree(query, ulElement) {
+        let anyVisible = false;
+        ulElement.querySelectorAll(":scope > li").forEach((li) => {
+          const name =
+            li.querySelector(".fileName")?.textContent.toLowerCase() || "";
+          const childUl = li.querySelector("ul");
+          let childVisible = false;
+          if (childUl) childVisible = filterTree(query, childUl);
+          const match = name.includes(query);
+          li.style.display = match || childVisible ? "block" : "none";
+          anyVisible = anyVisible || match || childVisible;
+        });
+        return anyVisible;
+      }
+      fileSearch.addEventListener("input", () => {
+        const query = fileSearch.value.toLowerCase();
+        const topUl = fileTreeDiv.querySelector("ul");
+        if (topUl) filterTree(query, topUl);
+      });
+
+      /* -------------------- Editor & XML Worker -------------------- */
+      function showLoading() {
+        editorLoading.style.display = "flex";
+      }
+      function hideLoading() {
+        editorLoading.style.display = "none";
+      }
+      function displayFileInMonaco(content, language) {
+        editorContainer.style.display = "";
+        if (monacoEditor) {
+          if (!monacoEditor.getModel()) {
+            const model = monaco.editor.createModel(content, "xml");
+            monacoEditor.setModel(model);
+          } else {
+            monaco.editor.setModelLanguage(monacoEditor.getModel(), "xml");
+            monacoEditor.setValue(content);
+          }
+          monacoEditor.revealPosition({ lineNumber: 1, column: 1 });
+        }
+      }
+
+      /* -------------------- XML Formatting Worker -------------------- */
+      (function initWorker() {
+        const blob = new Blob(
+          [
+            `
+        importScripts('https://cdn.jsdelivr.net/npm/xml-formatter@3.6.7/dist/browser/xml-formatter-singleton.js');
+        self.onmessage = function(e){
+          const { text, path } = e.data;
+          try {
+            const formatted = xmlFormatter(text);
+            self.postMessage({ success:true, formatted, path });
+          } catch(err){
+            self.postMessage({ success:false, error: err.message, path });
+          }
+        };
+      `,
+          ],
+          { type: "application/javascript" },
+        );
+
+        xmlWorker = new Worker(URL.createObjectURL(blob));
+
+        xmlWorker.onmessage = function (e) {
+          const { success, formatted, error, path } = e.data;
+          if (success) {
+            fileCache[path] = formatted;
+            saveFileToDB(path, formatted);
+            displayFileInMonaco(formatted, "xml");
+          } else {
+            displayFileInMonaco("Error formatting XML: " + error, "plaintext");
+          }
+          hideLoading();
+        };
+      })();
+
+      function setupMonaco() {
+        require.config({
+          paths: {
+            vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs",
+          },
+        });
+
+        require(["vs/editor/editor.main"], function () {
+          monacoEditor = monaco.editor.create(
+            document.getElementById("editorContainer"),
+            {
+              value: "",
+              language: "plaintext", // default language
+              theme: "vs-dark",
+              automaticLayout: true,
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+            },
+          );
+
+          // Optional: XML folding provider
+          monaco.languages.registerFoldingRangeProvider("xml", {
+            provideFoldingRanges: function (model) {
+              const ranges = [];
+              const stack = [];
+              for (let i = 1; i <= model.getLineCount(); i++) {
+                const line = model.getLineContent(i).trim();
+                const open = line.match(/^<([a-zA-Z0-9:_-]+)(\s|>|$)/);
+                const close = line.match(/^<\/([a-zA-Z0-9:_-]+)>/);
+                if (open && !line.endsWith("/>"))
+                  stack.push({ tag: open[1], start: i });
+                else if (close && stack.length > 0) {
+                  const last = stack.pop();
+                  if (last.tag === close[1] && i > last.start)
+                    ranges.push({
+                      start: last.start,
+                      end: i,
+                      kind: monaco.languages.FoldingRangeKind.Region,
+                    });
+                }
+              }
+              return ranges;
+            },
+          });
+        });
+      }
+      document.addEventListener("DOMContentLoaded", setupMonaco);
+    </script>
+  </body>
+</html>
