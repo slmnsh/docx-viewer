@@ -294,6 +294,7 @@
 
       function setActiveFileHeader(filename) {
         editorHeader.textContent = filename || "No file selected";
+        docxName = filename
       }
 
       let zipFilesMap = {};
@@ -301,6 +302,7 @@
       let xmlWorker;
       const fileCache = {};
       let selectedFileLi = null;
+      let docxName;
 
       // Supported image extensions
       const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp"];
@@ -520,7 +522,7 @@
                 }
 
                 // Check IndexedDB
-                const cached = await loadFileFromDB(fullPath);
+                const cached = await loadFileFromDB(docxName + "/" + fullPath);
                 if (cached) {
                   fileCache[fullPath] = cached;
                   displayFileInMonaco(
@@ -538,7 +540,7 @@
                 } else {
                   displayFileInMonaco(text, "plaintext");
                   fileCache[fullPath] = text;
-                  saveFileToDB(fullPath, text);
+                  saveFileToDB(docxName + "/" + fullPath, text);
                 }
               });
             }
