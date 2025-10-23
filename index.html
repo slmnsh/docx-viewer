@@ -263,7 +263,14 @@
         text-align: center;
         z-index: 9999;
         flex-direction: column;
+      }
+      #welcomeSection {
         cursor: pointer;
+      }
+      #welcomeSection:hover {
+        background: rgba(40, 40, 40, 0.3);
+        border-radius: 8px;
+        padding: 20px;
       }
       #fullScreenOverlay h2 {
         margin: 0;
@@ -278,8 +285,70 @@
         color: #9cdcfe;
         margin-top: 8px;
       }
-      #fullScreenOverlay:hover {
-        background: rgba(40, 40, 40, 0.95);
+      #recentFiles {
+        margin-top: 40px;
+        max-width: 600px;
+        width: 90%;
+      }
+      #recentFiles h3 {
+        font-size: 16px;
+        color: #9cdcfe;
+        margin-bottom: 15px;
+        text-align: left;
+      }
+      .recentFileItem {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 15px;
+        background: #252526;
+        border: 1px solid #333;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.2s;
+      }
+      .recentFileItem:hover {
+        background: #2d2d30;
+        border-color: #007acc;
+      }
+      .recentFileItem .material-icons {
+        color: #9cdcfe;
+        font-size: 24px;
+      }
+      .recentFileInfo {
+        flex: 1;
+        min-width: 0;
+      }
+      .recentFileName {
+        font-size: 14px;
+        color: #d4d4d4;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .recentFileDate {
+        font-size: 12px;
+        color: #858585;
+        margin-top: 2px;
+      }
+      .recentFileDelete {
+        color: #858585;
+        font-size: 18px;
+        padding: 4px;
+        border-radius: 3px;
+      }
+      .recentFileDelete:hover {
+        background: #505050;
+        color: #ffffff;
+      }
+      #noRecentFiles {
+        color: #858585;
+        font-size: 14px;
+        padding: 20px;
+        text-align: center;
       }
     </style>
   </head>
@@ -328,9 +397,17 @@
     </div>
 
     <div id="fullScreenOverlay">
-      <h2>Welcome</h2>
-      <p>Click or drag a DOCX file anywhere to start</p>
-      <span>Supported: .docx</span>
+      <div id="welcomeSection">
+        <h2>Welcome</h2>
+        <p>Click or drag a DOCX file anywhere to start</p>
+        <span>Supported: .docx</span>
+      </div>
+      <div id="recentFiles">
+        <h3>Recent Files</h3>
+        <div id="recentFilesList">
+          <div id="noRecentFiles">No recent files</div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -344,6 +421,8 @@
       const docxImage = document.getElementById("docxImage");
       const editorHeader = document.getElementById("viewerHeader");
       const tabsContainer = document.getElementById("tabsContainer");
+      const recentFilesList = document.getElementById("recentFilesList");
+      const welcomeSection = document.getElementById("welcomeSection");
 
       function setActiveFileHeader(filename) {
         editorHeader.textContent = filename || "No file selected";
@@ -358,6 +437,7 @@
       let docxName;
       let openTabs = [];
       let activeTabPath = null;
+      let currentFileData = null;
 
       // Supported image extensions
       const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp"];
@@ -369,11 +449,13 @@
       /* -------------------- IndexedDB -------------------- */
       function openDB() {
         return new Promise((resolve, reject) => {
-          const request = indexedDB.open("docxViewerDB", 1);
+          const request = indexedDB.open("docxViewerDB", 2);
           request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains("files"))
               db.createObjectStore("files", { keyPath: "path" });
+            if (!db.objectStoreNames.contains("recentFiles"))
+              db.createObjectStore("recentFiles", { keyPath: "name" });
           };
           request.onsuccess = (e) => resolve(e.target.result);
           request.onerror = (e) => reject(e.target.error);
@@ -400,6 +482,44 @@
         });
       }
 
+      async function saveRecentFile(name, fileData) {
+        const db = await openDB();
+        const tx = db.transaction("recentFiles", "readwrite");
+        tx.objectStore("recentFiles").put({
+          name,
+          timestamp: Date.now(),
+          data: fileData
+        });
+        return new Promise((resolve) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        });
+      }
+
+      async function getRecentFiles() {
+        const db = await openDB();
+        return new Promise((resolve) => {
+          const tx = db.transaction("recentFiles", "readonly");
+          const req = tx.objectStore("recentFiles").getAll();
+          req.onsuccess = () => {
+            const files = req.result || [];
+            files.sort((a, b) => b.timestamp - a.timestamp);
+            resolve(files.slice(0, 10));
+          };
+          req.onerror = () => resolve([]);
+        });
+      }
+
+      async function deleteRecentFile(name) {
+        const db = await openDB();
+        const tx = db.transaction("recentFiles", "readwrite");
+        tx.objectStore("recentFiles").delete(name);
+        return new Promise((resolve) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        });
+      }
+
       /* -------------------- File Input / Drag Drop -------------------- */
       const hiddenInput = document.createElement("input");
       hiddenInput.type = "file";
@@ -415,7 +535,7 @@
         handleFile(e.target.files[0]);
         fullScreenOverlay.style.display = "none";
       });
-      fullScreenOverlay.addEventListener("click", () => {
+      welcomeSection.addEventListener("click", () => {
         hiddenInput.value = "";
         hiddenInput.click();
       });
@@ -435,9 +555,20 @@
       });
 
       /* -------------------- DOCX Loading -------------------- */
-      async function handleFile(file) {
+      async function handleFile(file, fromRecent = false) {
         if (!file) return;
-        const zip = await JSZip.loadAsync(file);
+
+        let arrayBuffer;
+        if (fromRecent) {
+          arrayBuffer = file;
+        } else {
+          arrayBuffer = await file.arrayBuffer();
+          const fileName = file.name;
+          await saveRecentFile(fileName, arrayBuffer);
+          await renderRecentFiles();
+        }
+
+        const zip = await JSZip.loadAsync(arrayBuffer);
         zipFilesMap = {};
         Object.keys(zip.files).forEach((path) => {
           if (!zip.files[path].dir) zipFilesMap[path] = zip.files[path];
@@ -445,7 +576,11 @@
         const tree = buildTree(Object.keys(zipFilesMap));
         fileTreeDiv.innerHTML = "";
         fileTreeDiv.appendChild(renderTree(tree));
-        setActiveFileHeader(file.name);
+
+        if (!fromRecent) {
+          setActiveFileHeader(file.name);
+        }
+
         openTabs = [];
         activeTabPath = null;
         renderTabs();
@@ -796,6 +931,62 @@
         };
       })();
 
+      /* -------------------- Recent Files UI -------------------- */
+      async function renderRecentFiles() {
+        const recentFiles = await getRecentFiles();
+
+        if (recentFiles.length === 0) {
+          recentFilesList.innerHTML = '<div id="noRecentFiles">No recent files</div>';
+          return;
+        }
+
+        recentFilesList.innerHTML = "";
+        recentFiles.forEach((file) => {
+          const item = document.createElement("div");
+          item.className = "recentFileItem";
+
+          const icon = document.createElement("span");
+          icon.className = "material-icons";
+          icon.textContent = "description";
+
+          const info = document.createElement("div");
+          info.className = "recentFileInfo";
+
+          const name = document.createElement("div");
+          name.className = "recentFileName";
+          name.textContent = file.name;
+
+          const date = document.createElement("div");
+          date.className = "recentFileDate";
+          const fileDate = new Date(file.timestamp);
+          date.textContent = fileDate.toLocaleDateString() + " " + fileDate.toLocaleTimeString();
+
+          info.appendChild(name);
+          info.appendChild(date);
+
+          const deleteBtn = document.createElement("span");
+          deleteBtn.className = "material-icons recentFileDelete";
+          deleteBtn.textContent = "close";
+          deleteBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            await deleteRecentFile(file.name);
+            await renderRecentFiles();
+          });
+
+          item.appendChild(icon);
+          item.appendChild(info);
+          item.appendChild(deleteBtn);
+
+          item.addEventListener("click", async () => {
+            setActiveFileHeader(file.name);
+            await handleFile(file.data, true);
+            fullScreenOverlay.style.display = "none";
+          });
+
+          recentFilesList.appendChild(item);
+        });
+      }
+
       function setupMonaco() {
         require.config({
           paths: {
@@ -808,7 +999,7 @@
             document.getElementById("editorContainer"),
             {
               value: "",
-              language: "plaintext", // default language
+              language: "plaintext",
               theme: "vs-dark",
               automaticLayout: true,
               readOnly: true,
@@ -817,7 +1008,6 @@
             },
           );
 
-          // Optional: XML folding provider
           monaco.languages.registerFoldingRangeProvider("xml", {
             provideFoldingRanges: function (model) {
               const ranges = [];
@@ -841,6 +1031,8 @@
               return ranges;
             },
           });
+
+          renderRecentFiles();
         });
       }
       document.addEventListener("DOMContentLoaded", setupMonaco);
