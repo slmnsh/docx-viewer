@@ -908,6 +908,14 @@
           return;
         }
 
+        // Save current tab's scroll state before opening new tab
+        if (activeTabPath && monacoEditor) {
+          const currentTab = openTabs.find(t => t.path === activeTabPath);
+          if (currentTab && currentTab.type !== "image") {
+            currentTab.viewState = monacoEditor.saveViewState();
+          }
+        }
+
         openTabs.push({ path, name, content, type });
         activeTabPath = path;
         renderTabs();
@@ -924,7 +932,7 @@
           if (openTabs.length > 0) {
             const newActiveTab = openTabs[Math.max(0, index - 1)];
             activeTabPath = newActiveTab.path;
-            displayContent(newActiveTab.content, newActiveTab.type);
+            displayContent(newActiveTab.content, newActiveTab.type, newActiveTab.viewState);
           } else {
             activeTabPath = null;
             editorContainer.style.display = "";
@@ -940,9 +948,17 @@
         const tab = openTabs.find(t => t.path === path);
         if (!tab) return;
 
+        // Save current tab's scroll state before switching
+        if (activeTabPath && monacoEditor) {
+          const currentTab = openTabs.find(t => t.path === activeTabPath);
+          if (currentTab && currentTab.type !== "image") {
+            currentTab.viewState = monacoEditor.saveViewState();
+          }
+        }
+
         activeTabPath = path;
         renderTabs();
-        displayContent(tab.content, tab.type);
+        displayContent(tab.content, tab.type, tab.viewState);
         updateFileTreeSelection(path);
       }
 
@@ -978,7 +994,7 @@
         });
       }
 
-      function displayContent(content, type) {
+      function displayContent(content, type, viewState) {
         if (type === "image") {
           editorContainer.style.display = "none";
           imageContainer.style.display = "flex";
@@ -986,7 +1002,7 @@
         } else {
           imageContainer.style.display = "none";
           editorContainer.style.display = "";
-          displayFileInMonaco(content, type);
+          displayFileInMonaco(content, type, viewState);
         }
       }
 
@@ -997,7 +1013,7 @@
       function hideLoading() {
         editorLoading.style.display = "none";
       }
-      function displayFileInMonaco(content, language) {
+      function displayFileInMonaco(content, language, viewState) {
         editorContainer.style.display = "";
         if (monacoEditor) {
           if (!monacoEditor.getModel()) {
@@ -1007,7 +1023,14 @@
             monaco.editor.setModelLanguage(monacoEditor.getModel(), "xml");
             monacoEditor.setValue(content);
           }
-          monacoEditor.revealPosition({ lineNumber: 1, column: 1 });
+          
+          // Restore scroll position if available, otherwise go to top
+          if (viewState) {
+            monacoEditor.restoreViewState(viewState);
+            monacoEditor.focus();
+          } else {
+            monacoEditor.revealPosition({ lineNumber: 1, column: 1 });
+          }
         }
       }
 
