@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>DOCX Viewer - Fixed Tree & Actions</title>
+    <title>DOCX Viewer - Explore and Edit Word Documents</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.js"></script>
     <link
@@ -10,11 +10,16 @@
       rel="stylesheet"
     />
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         margin: 0;
         background: #1e1e1e;
         color: #d4d4d4;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       #viewerContainer {
         display: flex;
@@ -41,25 +46,49 @@
         background: #0e639c;
         color: #fff;
         border: none;
-        padding: 4px 10px;
-        border-radius: 3px;
+        padding: 6px 12px;
+        border-radius: 4px;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         width: max-content;
         text-wrap: nowrap;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
       }
       #uploadBtn:hover {
         background: #1177bb;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        transform: translateY(-1px);
+      }
+      #uploadBtn:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+      #uploadBtn:focus,
+      #uploadBtn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.4);
       }
       #fileSearch {
-        padding: 4px;
-        font-size: 12px;
+        padding: 6px 8px;
+        font-size: 13px;
         width: calc(100% - 20px);
-        border-radius: 3px;
-        border: none;
+        border-radius: 4px;
+        border: 1px solid #3e3e3e;
         background: #333;
         color: #d4d4d4;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      }
+      #fileSearch:focus {
+        outline: none;
+        border-color: #007acc;
+        background: #3a3a3a;
+        box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.15);
+      }
+      #fileSearch::placeholder {
+        color: #858585;
       }
       #fileTree {
         margin-top: 5px;
@@ -77,11 +106,17 @@
         font-size: 13px;
         margin: 1px 0;
       }
-      li .labelContainer:hover {
-        background: rgba(255, 255, 255, 0.1);
+      li .labelContainer {
+        transition: background 0.15s ease;
       }
-      li.selected {
-        background: rgba(0, 122, 204, 0.4);
+      li .labelContainer:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      li.selected .labelContainer {
+        background: rgba(0, 122, 204, 0.35);
+      }
+      li.selected .labelContainer:hover {
+        background: rgba(0, 122, 204, 0.45);
       }
 
       /* Label row with flex for name + actions */
@@ -159,15 +194,26 @@
       .fileActionsDropdown button {
         display: block;
         width: 100%;
-        padding: 4px 6px;
+        padding: 6px 10px;
         text-align: left;
         border: none;
         background: none;
         color: #d4d4d4;
         cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: inherit;
+        font-size: 12px;
       }
       .fileActionsDropdown button:hover {
-        background: #3e3e3e;
+        background: #007acc;
+        color: #ffffff;
+      }
+      .fileActionsDropdown button:focus,
+      .fileActionsDropdown button:focus-visible {
+        outline: none;
+        background: #007acc;
+        color: #ffffff;
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
       }
       .fileActionsMenu.open .fileActionsDropdown {
         display: block;
@@ -200,14 +246,19 @@
         white-space: nowrap;
         user-select: none;
         position: relative;
+        transition: all 0.15s ease;
       }
       .tab:hover {
         background: #2a2d2e;
+        color: #cccccc;
       }
       .tab.active {
         background: #1e1e1e;
         color: #ffffff;
-        border-bottom: 1px solid #007acc;
+        border-bottom: 2px solid #007acc;
+      }
+      .tab.active:hover {
+        background: #1e1e1e;
       }
       .tab .tab-label {
         max-width: 120px;
@@ -223,6 +274,7 @@
         border-radius: 3px;
         font-size: 16px;
         color: #858585;
+        transition: all 0.15s ease;
       }
       .tab .tab-close:hover {
         background: #505050;
@@ -255,7 +307,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(30, 30, 30, 0.95);
+        background: linear-gradient(135deg, #1e1e1e 0%, #252526 100%);
         color: #fff;
         display: flex;
         justify-content: center;
@@ -263,27 +315,60 @@
         text-align: center;
         z-index: 9999;
         flex-direction: column;
+        padding: 20px;
       }
       #welcomeSection {
         cursor: pointer;
+        padding: 40px;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
       }
       #welcomeSection:hover {
-        background: rgba(40, 40, 40, 0.3);
-        border-radius: 8px;
-        padding: 20px;
+        background: rgba(0, 122, 204, 0.08);
+        border-color: rgba(0, 122, 204, 0.3);
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+      #welcomeSection:focus,
+      #welcomeSection:focus-visible {
+        outline: none;
+        border-color: rgba(0, 122, 204, 0.5);
+        box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
       }
       #fullScreenOverlay h2 {
-        margin: 0;
-        font-size: 24px;
+        margin: 0 0 16px 0;
+        font-size: 36px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, #ffffff 0%, #9cdcfe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
       #fullScreenOverlay p {
-        margin: 5px 0;
-        font-size: 16px;
+        margin: 8px 0;
+        font-size: 18px;
+        color: #d4d4d4;
+        line-height: 1.6;
+        max-width: 500px;
       }
-      #fullScreenOverlay span {
+      #fullScreenOverlay .subtitle {
+        font-size: 14px;
+        color: #858585;
+        margin-top: 12px;
+      }
+      #fullScreenOverlay .file-format {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 6px 12px;
+        background: rgba(0, 122, 204, 0.15);
+        border: 1px solid rgba(0, 122, 204, 0.3);
+        border-radius: 6px;
         font-size: 12px;
         color: #9cdcfe;
-        margin-top: 8px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
       }
       #recentFiles {
         margin-top: 40px;
@@ -291,27 +376,38 @@
         width: 90%;
       }
       #recentFiles h3 {
-        font-size: 16px;
-        color: #9cdcfe;
-        margin-bottom: 15px;
+        font-size: 18px;
+        color: #ffffff;
+        margin-bottom: 16px;
         text-align: left;
+        font-weight: 600;
+        letter-spacing: -0.3px;
       }
       .recentFileItem {
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 10px 15px;
-        background: #252526;
-        border: 1px solid #333;
-        border-radius: 4px;
-        margin-bottom: 8px;
+        padding: 12px 16px;
+        background: rgba(37, 37, 38, 0.6);
+        border: 1px solid #3e3e3e;
+        border-radius: 8px;
+        margin-bottom: 10px;
         cursor: pointer;
         text-align: left;
-        transition: all 0.2s;
+        transition: all 0.25s ease;
+        backdrop-filter: blur(10px);
       }
       .recentFileItem:hover {
-        background: #2d2d30;
+        background: rgba(45, 45, 48, 0.8);
         border-color: #007acc;
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+      .recentFileItem:focus,
+      .recentFileItem:focus-visible {
+        outline: none;
+        border-color: #007acc;
+        box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.3);
       }
       .recentFileItem .material-icons {
         color: #9cdcfe;
@@ -337,11 +433,24 @@
       .recentFileDelete {
         color: #858585;
         font-size: 18px;
-        padding: 4px;
-        border-radius: 3px;
+        padding: 6px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-family: "Material Icons";
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .recentFileDelete:focus,
+      .recentFileDelete:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(209, 78, 78, 0.4);
       }
       .recentFileDelete:hover {
-        background: #505050;
+        background: #d14e4e;
         color: #ffffff;
       }
       #noRecentFiles {
@@ -397,13 +506,14 @@
     </div>
 
     <div id="fullScreenOverlay">
-      <div id="welcomeSection">
-        <h2>Welcome</h2>
-        <p>Click or drag a DOCX file anywhere to start</p>
-        <span>Supported: .docx</span>
+      <div id="welcomeSection" role="button" tabindex="0">
+        <h2>DOCX Viewer</h2>
+        <p>Explore and edit Word document internals</p>
+        <p class="subtitle">Click here or drag a file to get started</p>
+        <span class="file-format">Supports .docx files</span>
       </div>
       <div id="recentFiles">
-        <h3>Recent Files</h3>
+        <h3>Recent Documents</h3>
         <div id="recentFilesList">
           <div id="noRecentFiles">No recent files</div>
         </div>
@@ -538,6 +648,13 @@
       welcomeSection.addEventListener("click", () => {
         hiddenInput.value = "";
         hiddenInput.click();
+      });
+      welcomeSection.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          hiddenInput.value = "";
+          hiddenInput.click();
+        }
       });
 
       ["dragover", "drop"].forEach((evt) => {
@@ -944,6 +1061,8 @@
         recentFiles.forEach((file) => {
           const item = document.createElement("div");
           item.className = "recentFileItem";
+          item.setAttribute("role", "button");
+          item.setAttribute("tabindex", "0");
 
           const icon = document.createElement("span");
           icon.className = "material-icons";
@@ -964,9 +1083,10 @@
           info.appendChild(name);
           info.appendChild(date);
 
-          const deleteBtn = document.createElement("span");
+          const deleteBtn = document.createElement("button");
           deleteBtn.className = "material-icons recentFileDelete";
           deleteBtn.textContent = "close";
+          deleteBtn.setAttribute("aria-label", "Delete " + file.name);
           deleteBtn.addEventListener("click", async (e) => {
             e.stopPropagation();
             await deleteRecentFile(file.name);
@@ -977,10 +1097,18 @@
           item.appendChild(info);
           item.appendChild(deleteBtn);
 
-          item.addEventListener("click", async () => {
+          const openFile = async () => {
             setActiveFileHeader(file.name);
             await handleFile(file.data, true);
             fullScreenOverlay.style.display = "none";
+          };
+
+          item.addEventListener("click", openFile);
+          item.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openFile();
+            }
           });
 
           recentFilesList.appendChild(item);
