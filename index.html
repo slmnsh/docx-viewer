@@ -176,10 +176,61 @@
       #editorWrapper {
         flex: 1;
         position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      #tabsContainer {
+        display: flex;
+        background: #252526;
+        border-bottom: 1px solid #333;
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-height: 35px;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #2d2d30;
+        border-right: 1px solid #333;
+        color: #969696;
+        cursor: pointer;
+        font-size: 13px;
+        white-space: nowrap;
+        user-select: none;
+        position: relative;
+      }
+      .tab:hover {
+        background: #2a2d2e;
+      }
+      .tab.active {
+        background: #1e1e1e;
+        color: #ffffff;
+        border-bottom: 1px solid #007acc;
+      }
+      .tab .tab-label {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tab .tab-close {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        font-size: 16px;
+        color: #858585;
+      }
+      .tab .tab-close:hover {
+        background: #505050;
+        color: #ffffff;
       }
       #editorContainer {
         width: 100%;
-        height: 100%;
+        flex: 1;
       }
       #editorLoading {
         position: absolute;
@@ -254,6 +305,7 @@
         <div id="fileTree"></div>
       </div>
       <div id="editorWrapper">
+        <div id="tabsContainer"></div>
         <div id="editorLoading">Loading...</div>
         <div id="editorContainer"></div>
         <div
@@ -291,6 +343,7 @@
       const imageContainer = document.getElementById("imageContainer");
       const docxImage = document.getElementById("docxImage");
       const editorHeader = document.getElementById("viewerHeader");
+      const tabsContainer = document.getElementById("tabsContainer");
 
       function setActiveFileHeader(filename) {
         editorHeader.textContent = filename || "No file selected";
@@ -303,6 +356,8 @@
       const fileCache = {};
       let selectedFileLi = null;
       let docxName;
+      let openTabs = [];
+      let activeTabPath = null;
 
       // Supported image extensions
       const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp"];
@@ -391,6 +446,9 @@
         fileTreeDiv.innerHTML = "";
         fileTreeDiv.appendChild(renderTree(tree));
         setActiveFileHeader(file.name);
+        openTabs = [];
+        activeTabPath = null;
+        renderTabs();
         if (monacoEditor) monacoEditor.setValue("");
       }
 
@@ -500,24 +558,20 @@
                 const fd = zipFilesMap[fullPath];
                 if (!fd) return;
 
+                const fileName = fullPath.split("/").pop();
+
                 // Handle images
                 if (isImageFile(fullPath)) {
                   const blob = await fd.async("blob");
                   const url = URL.createObjectURL(blob);
-
-                  // Hide Monaco, show image container
-                  editorContainer.style.display = "none";
-                  imageContainer.style.display = "flex";
-                  docxImage.src = url;
+                  openTab(fullPath, fileName, url, "image");
                   return;
                 }
 
                 // Check in-memory cache
                 if (fileCache[fullPath]) {
-                  displayFileInMonaco(
-                    fileCache[fullPath],
-                    fullPath.endsWith(".xml") ? "xml" : "plaintext",
-                  );
+                  const type = fullPath.endsWith(".xml") ? "xml" : "plaintext";
+                  openTab(fullPath, fileName, fileCache[fullPath], type);
                   return;
                 }
 
@@ -525,10 +579,8 @@
                 const cached = await loadFileFromDB(docxName + "/" + fullPath);
                 if (cached) {
                   fileCache[fullPath] = cached;
-                  displayFileInMonaco(
-                    cached,
-                    fullPath.endsWith(".xml") ? "xml" : "plaintext",
-                  );
+                  const type = fullPath.endsWith(".xml") ? "xml" : "plaintext";
+                  openTab(fullPath, fileName, cached, type);
                   return;
                 }
 
@@ -536,11 +588,11 @@
                 const text = await fd.async("text");
                 if (fullPath.endsWith(".xml")) {
                   showLoading();
-                  xmlWorker.postMessage({ text, path: fullPath });
+                  xmlWorker.postMessage({ text, path: fullPath, fileName });
                 } else {
-                  displayFileInMonaco(text, "plaintext");
                   fileCache[fullPath] = text;
                   saveFileToDB(docxName + "/" + fullPath, text);
+                  openTab(fullPath, fileName, text, "plaintext");
                 }
               });
             }
@@ -569,6 +621,89 @@
         const topUl = fileTreeDiv.querySelector("ul");
         if (topUl) filterTree(query, topUl);
       });
+
+      /* -------------------- Tab Management -------------------- */
+      function renderTabs() {
+        tabsContainer.innerHTML = "";
+        openTabs.forEach((tab) => {
+          const tabEl = document.createElement("div");
+          tabEl.className = "tab" + (tab.path === activeTabPath ? " active" : "");
+
+          const label = document.createElement("span");
+          label.className = "tab-label";
+          label.textContent = tab.name;
+          label.title = tab.path;
+
+          const closeBtn = document.createElement("span");
+          closeBtn.className = "tab-close";
+          closeBtn.innerHTML = "×";
+          closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            closeTab(tab.path);
+          });
+
+          tabEl.appendChild(label);
+          tabEl.appendChild(closeBtn);
+          tabEl.addEventListener("click", () => switchToTab(tab.path));
+          tabsContainer.appendChild(tabEl);
+        });
+      }
+
+      function openTab(path, name, content, type) {
+        const existingTab = openTabs.find(t => t.path === path);
+        if (existingTab) {
+          switchToTab(path);
+          return;
+        }
+
+        openTabs.push({ path, name, content, type });
+        activeTabPath = path;
+        renderTabs();
+        displayContent(content, type);
+      }
+
+      function closeTab(path) {
+        const index = openTabs.findIndex(t => t.path === path);
+        if (index === -1) return;
+
+        openTabs.splice(index, 1);
+
+        if (activeTabPath === path) {
+          if (openTabs.length > 0) {
+            const newActiveTab = openTabs[Math.max(0, index - 1)];
+            activeTabPath = newActiveTab.path;
+            displayContent(newActiveTab.content, newActiveTab.type);
+          } else {
+            activeTabPath = null;
+            editorContainer.style.display = "";
+            imageContainer.style.display = "none";
+            if (monacoEditor) monacoEditor.setValue("");
+          }
+        }
+
+        renderTabs();
+      }
+
+      function switchToTab(path) {
+        const tab = openTabs.find(t => t.path === path);
+        if (!tab) return;
+
+        activeTabPath = path;
+        renderTabs();
+        displayContent(tab.content, tab.type);
+      }
+
+      function displayContent(content, type) {
+        if (type === "image") {
+          editorContainer.style.display = "none";
+          imageContainer.style.display = "flex";
+          docxImage.src = content;
+        } else {
+          imageContainer.style.display = "none";
+          editorContainer.style.display = "";
+          displayFileInMonaco(content, type);
+        }
+      }
 
       /* -------------------- Editor & XML Worker -------------------- */
       function showLoading() {
@@ -614,13 +749,15 @@
         xmlWorker = new Worker(URL.createObjectURL(blob));
 
         xmlWorker.onmessage = function (e) {
-          const { success, formatted, error, path } = e.data;
+          const { success, formatted, error, path, fileName } = e.data;
           if (success) {
             fileCache[path] = formatted;
-            saveFileToDB(path, formatted);
-            displayFileInMonaco(formatted, "xml");
+            saveFileToDB(docxName + "/" + path, formatted);
+            const name = fileName || path.split("/").pop();
+            openTab(path, name, formatted, "xml");
           } else {
-            displayFileInMonaco("Error formatting XML: " + error, "plaintext");
+            const name = fileName || path.split("/").pop();
+            openTab(path, name, "Error formatting XML: " + error, "plaintext");
           }
           hideLoading();
         };
