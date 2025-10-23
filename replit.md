@@ -24,6 +24,9 @@ A browser-based DOCX file viewer and explorer that allows users to:
 - `package-lock.json` - Empty package lock file
 
 ## Recent Changes
+- **2025-10-23**: Added scroll state preservation for tabs - each tab remembers its scroll position when switching
+- **2025-10-23**: Enhanced UI with improved hover states, better typography, and polished design
+- **2025-10-23**: Added keyboard accessibility with focus states for all interactive elements
 - **2025-10-23**: Initial import from GitHub
 - **2025-10-23**: Configured for Replit environment with static HTTP server
 
