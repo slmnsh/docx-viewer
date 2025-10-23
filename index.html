@@ -691,6 +691,39 @@
         activeTabPath = path;
         renderTabs();
         displayContent(tab.content, tab.type);
+        updateFileTreeSelection(path);
+      }
+
+      function updateFileTreeSelection(path) {
+        if (selectedFileLi) selectedFileLi.classList.remove("selected");
+
+        const allFiles = fileTreeDiv.querySelectorAll("li.file");
+        allFiles.forEach(li => {
+          const labelDiv = li.querySelector(".labelContainer");
+          if (labelDiv) {
+            const fileNameSpan = labelDiv.querySelector(".fileName");
+            if (fileNameSpan) {
+              let currentPath = "";
+              let node = li;
+              const parts = [];
+
+              while (node && node !== fileTreeDiv) {
+                const nameSpan = node.querySelector(":scope > .labelContainer > .fileName");
+                if (nameSpan) {
+                  parts.unshift(nameSpan.textContent);
+                }
+                node = node.parentElement?.closest("li");
+              }
+
+              currentPath = parts.join("/");
+
+              if (currentPath === path) {
+                li.classList.add("selected");
+                selectedFileLi = li;
+              }
+            }
+          }
+        });
       }
 
       function displayContent(content, type) {
