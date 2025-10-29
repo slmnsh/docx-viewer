@@ -1,6 +1,5 @@
-// Monaco editor setup and management
-let monacoEditor
 let editorContainer
+let monacoEditor
 
 function displayFileInMonaco(content, language, viewState) {
   editorContainer.style.display = ""
@@ -64,13 +63,13 @@ function setupMonaco() {
       },
     })
 
+    // Implementation for rendering recent files
+    function renderRecentFiles() {
+      // Code to render recent files
+    }
+
     renderRecentFiles()
   })
-}
-
-function renderRecentFiles() {
-  // Placeholder for rendering recent files logic
-  console.log("Rendering recent files...")
 }
 
 document.addEventListener("DOMContentLoaded", () => {

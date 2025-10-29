@@ -1,13 +1,36 @@
-// File upload and DOCX loading logic
+// Declare variables before using them
+let uploadBtn,
+  fullScreenOverlay,
+  welcomeSection,
+  saveRecentFile,
+  renderRecentFiles,
+  zipFilesMap,
+  renderFileTree,
+  clearAllTabs,
+  docxName
+
+// Initialize variables
+uploadBtn = document.getElementById("uploadBtn")
+fullScreenOverlay = document.getElementById("fullScreenOverlay")
+welcomeSection = document.getElementById("welcomeSection")
+saveRecentFile = async (fileName, arrayBuffer) => {
+  // Implementation for saving recent file
+}
+renderRecentFiles = async () => {
+  // Implementation for rendering recent files
+}
+clearAllTabs = () => {
+  // Implementation for clearing all tabs
+}
+docxName = ""
+
 const hiddenInput = document.createElement("input")
 hiddenInput.type = "file"
 hiddenInput.accept = ".docx"
 hiddenInput.style.display = "none"
 document.body.appendChild(hiddenInput)
 
-const uploadBtn = document.getElementById("uploadBtn")
-const fullScreenOverlay = document.getElementById("fullScreenOverlay")
-const welcomeSection = document.getElementById("welcomeSection")
+const JSZip = window.JSZip
 
 uploadBtn.addEventListener("click", () => {
   hiddenInput.value = ""
@@ -31,7 +54,6 @@ welcomeSection.addEventListener("keydown", (e) => {
     hiddenInput.click()
   }
 })
-
 // Drag and drop support
 ;["dragover", "drop"].forEach((evt) => {
   document.addEventListener(evt, (e) => e.preventDefault())
@@ -49,25 +71,6 @@ fullScreenOverlay.addEventListener("dragover", (e) => {
 fullScreenOverlay.addEventListener("dragleave", (e) => {
   fullScreenOverlay.style.background = "rgba(30,30,30,0.95)"
 })
-
-// Global state
-let zipFilesMap = {}
-let docxName
-
-// Declare variables before using them
-const JSZip = window.JSZip // Assuming JSZip is available globally
-const saveRecentFile = async (fileName, arrayBuffer) => {
-  // Implementation for saving recent file
-}
-const renderRecentFiles = async () => {
-  // Implementation for rendering recent files
-}
-const renderFileTree = (tree) => {
-  // Implementation for rendering file tree
-}
-const clearAllTabs = () => {
-  // Implementation for clearing all tabs
-}
 
 async function handleFile(file, fromRecent = false) {
   if (!file) return
@@ -115,4 +118,8 @@ function setActiveFileHeader(filename) {
   const editorHeader = document.getElementById("viewerHeader")
   editorHeader.textContent = filename || "No file selected"
   docxName = filename
+}
+
+renderFileTree = (tree) => {
+  // Implementation for rendering file tree
 }

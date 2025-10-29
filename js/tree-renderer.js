@@ -1,21 +1,16 @@
-// File tree rendering and filtering logic
-const fileTreeDiv = document.getElementById("fileTree")
-const fileSearch = document.getElementById("fileSearch")
-
-let selectedFileLi = null
-
-// Supported image extensions
 const imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp"]
 
-// Declare variables before using them
-const zipFilesMap = {} // Placeholder for zipFilesMap
-const openTab = () => {} // Placeholder for openTab
-const fileCache = {} // Placeholder for fileCache
-const loadFileFromDB = async () => {} // Placeholder for loadFileFromDB
-const docxName = "" // Placeholder for docxName
-const showLoading = () => {} // Placeholder for showLoading
-const xmlWorker = {} // Placeholder for xmlWorker
-const saveFileToDB = async () => {} // Placeholder for saveFileToDB
+const fileTreeDiv = document.getElementById("fileTreeDiv") // Declare fileTreeDiv
+const zipFilesMap = {} // Declare zipFilesMap
+let selectedFileLi = null // Declare selectedFileLi
+const openTab = (path, fileName, content, type) => {} // Declare openTab
+const fileCache = {} // Declare fileCache
+const loadFileFromDB = async (path) => {} // Declare loadFileFromDB
+const docxName = "" // Declare docxName
+const showLoading = () => {} // Declare showLoading
+const xmlWorker = {} // Declare xmlWorker
+const saveFileToDB = async (path, content) => {} // Declare saveFileToDB
+const fileSearch = document.getElementById("fileSearch") // Declare fileSearch
 
 function isImageFile(path) {
   const ext = path.slice(path.lastIndexOf(".")).toLowerCase()

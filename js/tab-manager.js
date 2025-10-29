@@ -1,16 +1,24 @@
-// Tab management logic
-const tabsContainer = document.getElementById("tabsContainer")
-const editorContainer = document.getElementById("editorContainer")
-const imageContainer = document.getElementById("imageContainer")
-const docxImage = document.getElementById("docxImage")
-
+// Declare global variables
+let tabsContainer
 let openTabs = []
 let activeTabPath = null
-const fileCache = {}
+let monacoEditor
+let editorContainer
+let imageContainer
+let docxImage
+let displayFileInMonaco
+let updateFileTreeSelection
 
-const monacoEditor = null // Declare monacoEditor variable
-const updateFileTreeSelection = null // Declare updateFileTreeSelection variable
-const displayFileInMonaco = null // Declare displayFileInMonaco variable
+// Function to initialize global variables
+function initializeGlobals() {
+  tabsContainer = document.getElementById("tabsContainer")
+  editorContainer = document.getElementById("editorContainer")
+  imageContainer = document.getElementById("imageContainer")
+  docxImage = document.getElementById("docxImage")
+  monacoEditor = window.monacoEditor // Assuming monacoEditor is initialized elsewhere
+  displayFileInMonaco = window.displayFileInMonaco // Assuming displayFileInMonaco is initialized elsewhere
+  updateFileTreeSelection = window.updateFileTreeSelection // Assuming updateFileTreeSelection is initialized elsewhere
+}
 
 function renderTabs() {
   tabsContainer.innerHTML = ""
@@ -96,7 +104,7 @@ function switchToTab(path) {
   activeTabPath = path
   renderTabs()
   displayContent(tab.content, tab.type, tab.viewState)
-  if (updateFileTreeSelection) updateFileTreeSelection(path) // Use updateFileTreeSelection if declared
+  updateFileTreeSelection(path)
 }
 
 function displayContent(content, type, viewState) {
@@ -107,7 +115,7 @@ function displayContent(content, type, viewState) {
   } else {
     imageContainer.style.display = "none"
     editorContainer.style.display = ""
-    if (displayFileInMonaco) displayFileInMonaco(content, type, viewState) // Use displayFileInMonaco if declared
+    displayFileInMonaco(content, type, viewState)
   }
 }
 
@@ -117,3 +125,6 @@ function clearAllTabs() {
   renderTabs()
   if (monacoEditor) monacoEditor.setValue("")
 }
+
+// Initialize globals when the script loads
+window.onload = initializeGlobals

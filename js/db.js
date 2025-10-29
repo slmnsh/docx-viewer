@@ -1,4 +1,3 @@
-// IndexedDB operations for caching files and recent files
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("docxViewerDB", 2)
