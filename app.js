@@ -427,8 +427,7 @@ function renderTree(obj, path = "") {
 function filterTree(query, ulElement) {
   let anyVisible = false;
   ulElement.querySelectorAll(":scope > li").forEach((li) => {
-    const name =
-      li.querySelector(".fileName")?.textContent.toLowerCase() || "";
+    const name = li.querySelector(".fileName")?.textContent.toLowerCase() || "";
     const childUl = li.querySelector("ul");
     let childVisible = false;
     if (childUl) childVisible = filterTree(query, childUl);
@@ -461,12 +460,12 @@ fileSearch.addEventListener("input", () => {
         };
       `,
     ],
-    { type: "application/javascript" }
+    { type: "application/javascript" },
   );
 
   xmlWorker = new Worker(URL.createObjectURL(blob));
 
-  xmlWorker.onmessage = function (e) {
+  xmlWorker.onmessage = function(e) {
     const { success, formatted, error, path, fileName, paneId } = e.data;
     const pane = splitManager.panes.get(paneId);
     if (!pane) return;
@@ -557,7 +556,7 @@ function setupMonaco() {
     },
   });
 
-  require(["vs/editor/editor.main"], function () {
+  require(["vs/editor/editor.main"], function() {
     splitManager.init(editorWrapper);
     renderRecentFiles();
   });

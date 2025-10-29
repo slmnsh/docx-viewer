@@ -1,53 +1,57 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DOCX Viewer - Explore and Edit Word Documents</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.js"></script>
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <title>DOCX Viewer - Explore and Edit Word Documents</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.53.0/min/vs/loader.js"></script>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-
-<body>
-  <div id="viewerHeader" style="
+  <body>
+    <div
+      id="viewerHeader"
+      style="
         padding: 5px 10px;
         background: #252526;
         color: #d4d4d4;
         font-size: 14px;
         border-bottom: 1px solid #333;
-      ">
-    No file selected
-  </div>
-  <div id="viewerContainer">
-    <div id="fileTreeContainer">
-      <header>
-        <input id="fileSearch" type="text" placeholder="Search files..." />
-        <button id="uploadBtn">Upload File</button>
-      </header>
-      <div id="fileTree"></div>
+      "
+    >
+      No file selected
     </div>
-    <div id="editorWrapper"></div>
-  </div>
+    <div id="viewerContainer">
+      <div id="fileTreeContainer">
+        <header>
+          <input id="fileSearch" type="text" placeholder="Search files..." />
+          <button id="uploadBtn">Upload File</button>
+        </header>
+        <div id="fileTree"></div>
+      </div>
+      <div id="editorWrapper"></div>
+    </div>
 
-  <div id="fullScreenOverlay">
-    <div id="welcomeSection" role="button" tabindex="0">
-      <h2>DOCX Viewer</h2>
-      <p>Explore and edit Word document internals</p>
-      <p class="subtitle">Click here or drag a file to get started</p>
-      <span class="file-format">Supports .docx files</span>
-    </div>
-    <div id="recentFiles">
-      <h3>Recent Documents</h3>
-      <div id="recentFilesList">
-        <div id="noRecentFiles">No recent files</div>
+    <div id="fullScreenOverlay">
+      <div id="welcomeSection" role="button" tabindex="0">
+        <h2>DOCX Viewer</h2>
+        <p>Explore and edit Word document internals</p>
+        <p class="subtitle">Click here or drag a file to get started</p>
+        <span class="file-format">Supports .docx files</span>
+      </div>
+      <div id="recentFiles">
+        <h3>Recent Documents</h3>
+        <div id="recentFilesList">
+          <div id="noRecentFiles">No recent files</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <script src="split-manager.js"></script>
-  <script src="app.js"></script>
-</body>
-
+    <script src="split-manager.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>
