@@ -1,756 +1,1004 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DOCX Internals Viewer</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Material Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
     <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+
     <style>
-        /* --- NEW POLISHED THEME --- */
-        :root {
-            --bg-dark: #181825;      /* Deep, rich dark background */
-            --bg-sidebar: #222138;   /* Sidebar/Secondary background */
-            --bg-header: #2e2d4d;    /* Pane/Main header background */
-            --border: #4a4a6b;       /* Soft, slightly purple border */
-            --text-main: #e0e0e0;    /* High-contrast main text */
-            --accent: #00aaff;       /* Vibrant, modern blue accent */
-            --hover: #353456;        /* Subtle hover state */
-            --selected: #4b4a69;     /* Clearer selected state */
-        }
+      /* --- NEW POLISHED THEME --- */
+      :root {
+        --bg-dark: #181825; /* Deep, rich dark background */
+        --bg-sidebar: #222138; /* Sidebar/Secondary background */
+        --bg-header: #2e2d4d; /* Pane/Main header background */
+        --border: #4a4a6b; /* Soft, slightly purple border */
+        --text-main: #e0e0e0; /* High-contrast main text */
+        --accent: #00aaff; /* Vibrant, modern blue accent */
+        --hover: #353456; /* Subtle hover state */
+        --selected: #4b4a69; /* Clearer selected state */
+        --scrollbar-color-thumb: var(--color-gray-200);
+        --scrollbar-color-track: transparent;
+        --scrollbar-width: thin;
+        --scrollbar-width-legacy: 10px;
+      }
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            height: 100vh;
-            margin: 0;
-        }
+      body {
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        overflow: hidden;
+        height: 100vh;
+        margin: 0;
+      }
 
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
-        ::-webkit-scrollbar-track { background: var(--bg-sidebar); }
-        ::-webkit-scrollbar-thumb { background: #5a5a75; border-radius: 5px; } /* Updated thumb color */
-        ::-webkit-scrollbar-thumb:hover { background: #70708f; }
+      /* Scrollbar styling */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-sidebar);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #5a5a75;
+        border-radius: 5px;
+      } /* Updated thumb color */
+      ::-webkit-scrollbar-thumb:hover {
+        background: #70708f;
+      }
 
-        /* File Tree */
-        .file-tree ul { list-style: none; padding-left: 12px; margin: 0; }
-        .file-tree li { cursor: pointer; line-height: 24px; border-radius: 4px; } /* Increased line-height */
-        .labelContainer {
-            display: flex; align-items: center; padding: 2px 5px; border-radius: 4px;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            transition: background-color 0.15s;
+      /* Modern browsers with `scrollbar-*` support */
+      @supports (scrollbar-width: auto) {
+        * {
+          scrollbar-color: var(--scrollbar-color-thumb)
+            var(--scrollbar-color-track);
+          scrollbar-width: var(--scrollbar-width);
         }
-        .labelContainer:hover { background-color: var(--hover); }
-        .file-tree li.selected > .labelContainer { 
-            background-color: var(--accent); 
-            color: white; 
-            box-shadow: 0 1px 4px rgba(0, 170, 255, 0.3); /* Subtle accent shadow */
-        }
-        
-        /* Icons */
-        .tree-icon { margin-right: 6px; font-size: 16px; color: #dcb67a; } /* Default folder color */
-        .file-xml .tree-icon { color: #ff6e6e; } /* Redish for xml */
-        .file-image .tree-icon { color: #c074f7; } /* Purple for images */
-        .file-font .tree-icon { color: #61d5f7; } /* Cyan for fonts */
-        .file-tree li.selected .tree-icon { color: white !important; } /* White icons when selected */
-        
-        .folder > ul { display: none; }
-        .folder.open > ul { display: block; }
-        .arrow { 
-            display: inline-block; width: 16px; text-align: center; margin-right: 2px; 
-            transition: transform 0.1s; font-size: 10px; color: #999;
-        }
-        .folder.open > .labelContainer .arrow { transform: rotate(90deg); }
+      }
 
-        /* Split Panes (Main Content Area) */
-        .splitContainer { display: flex; flex: 1; overflow: hidden; }
-        .splitContainer.horizontal { flex-direction: row; }
-        .splitContainer.vertical { flex-direction: column; }
+      /* Legacy browsers with `::-webkit-scrollbar-*` support */
+      @supports selector(::-webkit-scrollbar) {
+        ::-webkit-scrollbar-thumb {
+          background: var(--scrollbar-color-thumb);
+        }
+        ::-webkit-scrollbar-track {
+          background: var(--scrollbar-color-track);
+        }
+        ::-webkit-scrollbar {
+          max-width: var(--scrollbar-width-legacy);
+          max-height: var(--scrollbar-width-legacy);
+        }
+      }
 
-        .splitPane {
-            display: flex; flex-direction: column; flex: 1;
-            background: var(--bg-dark); 
-            border: 1px solid var(--border);
-            border-radius: 8px; /* Rounded corners for main pane */
-            overflow: hidden; /* Important for containing editor */
-            min-width: 0; min-height: 0; position: relative;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4); /* Depth */
-        }
-        .splitPane.active { border-color: var(--accent); }
-        
-        .paneHeader {
-            height: 38px; /* Slightly taller header */
-            background: var(--bg-header); 
-            display: flex;
-            justify-content: space-between; align-items: center; 
-            border-bottom: 1px solid var(--border);
-        }
-        
-        /* Tabs */
-        .paneTabsContainer { 
-            display: flex; 
-            overflow-x: auto; 
-            flex: 1; 
-            min-width: 0; 
-            height: 100%;
-        }
-        .tab {
-            padding: 0 14px; /* More padding */
-            background: var(--bg-header); 
-            margin-right: 1px;
-            cursor: pointer; font-size: 13px;
-            display: flex; align-items: center; 
-            max-width: 180px; /* Wider tabs */
-            flex-shrink: 0; 
-            height: 100%;
-            border-bottom: 3px solid transparent; /* Space for accent line */
-            transition: background 0.2s;
-        }
-        .tab:hover { background: #3c3b63; }
-        .tab.active { 
-            background: var(--bg-dark); 
-            color: white; 
-            border-bottom-color: var(--accent); /* Accent underline */
-        }
-        .tab-label { 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            white-space: nowrap; 
-            margin-right: 8px;
-            min-width: 0; 
-        }
-        .tab-close { 
-            font-size: 16px; 
-            border-radius: 4px; 
-            padding: 1px 3px; 
-            transition: background 0.15s;
-            color: #ccc;
-        }
-        .tab-close:hover { background: #55547a; color: white; }
+      /* File Tree */
+      .file-tree ul {
+        list-style: none;
+        padding-left: 12px;
+        margin: 0;
+      }
+      .file-tree li {
+        cursor: pointer;
+        line-height: 24px;
+        border-radius: 4px;
+      } /* Increased line-height */
+      .labelContainer {
+        display: flex;
+        align-items: center;
+        padding: 2px 5px;
+        border-radius: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background-color 0.15s;
+      }
+      .labelContainer:hover {
+        background-color: var(--hover);
+      }
+      .file-tree li.selected > .labelContainer {
+        background-color: var(--accent);
+        color: white;
+        box-shadow: 0 1px 4px rgba(0, 170, 255, 0.3); /* Subtle accent shadow */
+      }
 
-        .paneActions { 
-            display: flex; gap: 8px; padding: 0 10px; 
-            border-left: 1px solid var(--border);
-        }
-        .paneActionBtn {
-            background: transparent; border: none; color: #ccc;
-            cursor: pointer; font-size: 18px; padding: 4px; border-radius: 4px;
-            transition: background 0.15s, color 0.15s;
-        }
-        .paneActionBtn:hover { background: #444; color: var(--accent); }
+      /* Icons */
+      .tree-icon {
+        margin-right: 6px;
+        font-size: 16px;
+        color: #dcb67a;
+      } /* Default folder color */
+      .file-xml .tree-icon {
+        color: #ff6e6e;
+      } /* Redish for xml */
+      .file-image .tree-icon {
+        color: #c074f7;
+      } /* Purple for images */
+      .file-font .tree-icon {
+        color: #61d5f7;
+      } /* Cyan for fonts */
+      .file-tree li.selected .tree-icon {
+        color: white !important;
+      } /* White icons when selected */
 
-        .paneEditorContainer { flex: 1; position: relative; overflow: hidden; }
-        .paneImageContainer { 
-            flex: 1; display: flex; justify-content: center; align-items: center; 
-            background: var(--bg-dark); overflow: auto; 
-        }
-        .paneImageContainer img { 
-            max-width: 90%; max-height: 90%; 
-            border-radius: 6px; /* Images also rounded */
-            box-shadow: 0 4px 15px rgba(0,0,0,0.7); 
-        }
+      .folder > ul {
+        display: none;
+      }
+      .folder.open > ul {
+        display: block;
+      }
+      .arrow {
+        display: inline-block;
+        width: 16px;
+        text-align: center;
+        margin-right: 2px;
+        transition: transform 0.1s;
+        font-size: 10px;
+        color: #999;
+      }
+      .folder.open > .labelContainer .arrow {
+        transform: rotate(90deg);
+      }
 
-        /* Resizers */
-        .splitResizer { 
-            background: var(--bg-sidebar); 
-            z-index: 10; 
-            transition: background 0.2s; 
-            opacity: 0.5; /* Subtle by default */
-        }
-        .splitResizer:hover, .splitResizer.dragging { 
-            background: var(--accent); 
-            opacity: 1;
-        }
-        .horizontal > .splitResizer { width: 6px; cursor: col-resize; } /* Wider resizer */
-        .vertical > .splitResizer { height: 6px; cursor: row-resize; }
+      /* Split Panes (Main Content Area) */
+      .splitContainer {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+      .splitContainer.horizontal {
+        flex-direction: row;
+      }
+      .splitContainer.vertical {
+        flex-direction: column;
+      }
 
-        /* Loader/Overlay */
-        #loadingOverlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 50;
-            display: none; justify-content: center; align-items: center; flex-direction: column;
-        }
-        .spinner {
-            border: 4px solid #333; border-top: 4px solid var(--accent);
-            border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* LLM Analysis Box */
-        #geminiAnalysisBox {
-            position: fixed; bottom: 20px; right: 20px; z-index: 30;
-            max-width: 450px; /* Slightly wider */
-            background: var(--bg-sidebar); 
-            border: 1px solid var(--border);
-            border-radius: 12px; /* More rounded */
-            box-shadow: 0 8px 20px rgba(0,0,0,0.7);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
-            transform: translateX(100%); opacity: 0;
-            display: flex; flex-direction: column;
-            max-height: 80vh;
-        }
-        #geminiAnalysisBox.visible {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        #geminiAnalysisBox h3 {
-            background: var(--accent); 
-            color: white; 
-            padding: 12px 18px; /* More padding */
-            margin: 0; 
-            border-top-left-radius: 11px; 
-            border-top-right-radius: 11px;
-            font-size: 15px; 
-            font-weight: 600; 
-            display: flex; justify-content: space-between;
-            align-items: center;
-        }
-        #geminiAnalysisContent {
-            padding: 15px; color: var(--text-main); font-size: 14px; overflow-y: auto;
-        }
-        #geminiAnalysisContent h4 {
-            font-weight: 700;
-            color: var(--accent);
-            border-bottom: 1px dashed var(--border);
-            padding-bottom: 5px;
-            margin-top: 15px;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        #geminiAnalysisContent p { margin-bottom: 10px; line-height: 1.5; }
-        #geminiAnalysisContent strong { color: white; font-weight: 600; }
-        #geminiAnalysisContent ul { list-style: disc; padding-left: 20px; margin-bottom: 15px; }
-        #geminiAnalysisContent li { margin-bottom: 5px; }
-        #geminiAnalysisContent code { 
-            background: #444; 
-            padding: 2px 4px; 
-            border-radius: 4px; 
-            font-family: monospace;
-            font-size: 13px;
-            color: #a9ff00; /* HIGH CONTRAST COLOR FOR CODE TEXT */
-        }
-        #geminiAnalysisContent pre { 
-            background: #1e1e30; /* Darker pre background */
-            padding: 10px; 
-            border-radius: 6px; 
-            overflow-x: auto;
-            margin: 10px 0;
-            font-size: 13px;
-            border: 1px solid #353456;
-        }
+      .splitPane {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        background: var(--bg-dark);
+        border: 1px solid var(--border);
+        border-radius: 8px; /* Rounded corners for main pane */
+        overflow: hidden; /* Important for containing editor */
+        min-width: 0;
+        min-height: 0;
+        position: relative;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4); /* Depth */
+      }
+      .splitPane.active {
+        border-color: var(--accent);
+      }
 
-        /* Recent Files Sidebar */
-        .recent-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 10px 15px; /* More padding */
-            border-bottom: 1px solid #333; cursor: pointer; font-size: 14px;
-            width: 100%; box-sizing: border-box;
-        }
-        .recent-item:hover { background: var(--hover); }
-        .delete-recent { 
-            color: #666; 
-            padding: 4px; 
-            border-radius: 4px; 
-            transition: color 0.15s, background 0.15s;
-        }
-        .delete-recent:hover { color: #ff6e6e; background: #353456; }
+      .paneHeader {
+        height: 38px; /* Slightly taller header */
+        background: var(--bg-header);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+      }
 
-        /* Landing Page Recent Card */
-        .landing-recent-card {
-            background: var(--bg-sidebar); 
-            border: 1px solid var(--border); 
-            padding: 15px; 
-            border-radius: 10px; /* More rounded */
-            cursor: pointer; 
-            transition: all 0.2s;
-            display: flex; align-items: center; gap: 12px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      /* Tabs */
+      .paneTabsContainer {
+        display: flex;
+        overflow-x: scroll;
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+      }
+      .tab {
+        padding: 0 14px; /* More padding */
+        background: var(--bg-header);
+        margin-right: 1px;
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        max-width: 180px; /* Wider tabs */
+        flex-shrink: 0;
+        height: 100%;
+        border-bottom: 3px solid transparent; /* Space for accent line */
+        transition: background 0.2s;
+      }
+      .tab:hover {
+        background: #3c3b63;
+      }
+      .tab.active {
+        background: var(--bg-dark);
+        color: white;
+        border-bottom-color: var(--accent); /* Accent underline */
+      }
+      .tab-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-right: 8px;
+        min-width: 0;
+      }
+      .tab-close {
+        font-size: 16px;
+        border-radius: 4px;
+        padding: 1px 3px;
+        transition: background 0.15s;
+        color: #ccc;
+      }
+      .tab-close:hover {
+        background: #55547a;
+        color: white;
+      }
+
+      .paneActions {
+        display: flex;
+        gap: 8px;
+        padding: 0 10px;
+        border-left: 1px solid var(--border);
+      }
+      .paneActionBtn {
+        background: transparent;
+        border: none;
+        color: #ccc;
+        cursor: pointer;
+        font-size: 18px;
+        padding: 4px;
+        border-radius: 4px;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .paneActionBtn:hover {
+        background: #444;
+        color: var(--accent);
+      }
+
+      .paneEditorContainer {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .paneImageContainer {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: var(--bg-dark);
+        overflow: auto;
+      }
+      .paneImageContainer img {
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 6px; /* Images also rounded */
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+      }
+
+      /* Resizers */
+      .splitResizer {
+        background: var(--bg-sidebar);
+        z-index: 10;
+        transition: background 0.2s;
+        opacity: 0.5; /* Subtle by default */
+      }
+      .splitResizer:hover,
+      .splitResizer.dragging {
+        background: var(--accent);
+        opacity: 1;
+      }
+      .horizontal > .splitResizer {
+        width: 6px;
+        cursor: col-resize;
+      } /* Wider resizer */
+      .vertical > .splitResizer {
+        height: 6px;
+        cursor: row-resize;
+      }
+
+      /* Loader/Overlay */
+      #loadingOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 50;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+      }
+      .spinner {
+        border: 4px solid #333;
+        border-top: 4px solid var(--accent);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
         }
-        .landing-recent-card:hover { 
-            background: #2a2d45; 
-            border-color: var(--accent); 
-            transform: translateY(-3px); 
-            box-shadow: 0 6px 15px rgba(0, 170, 255, 0.2);
+        100% {
+          transform: rotate(360deg);
         }
+      }
+
+      /* LLM Analysis Box */
+      #geminiAnalysisBox {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 30;
+        max-width: 450px; /* Slightly wider */
+        background: var(--bg-sidebar);
+        border: 1px solid var(--border);
+        border-radius: 12px; /* More rounded */
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7);
+        transition:
+          transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.3s;
+        transform: translateX(100%);
+        opacity: 0;
+        display: flex;
+        flex-direction: column;
+        max-height: 80vh;
+      }
+      #geminiAnalysisBox.visible {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      #geminiAnalysisBox h3 {
+        background: var(--accent);
+        color: white;
+        padding: 12px 18px; /* More padding */
+        margin: 0;
+        border-top-left-radius: 11px;
+        border-top-right-radius: 11px;
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      #geminiAnalysisContent {
+        padding: 15px;
+        color: var(--text-main);
+        font-size: 14px;
+        overflow-y: auto;
+      }
+      #geminiAnalysisContent h4 {
+        font-weight: 700;
+        color: var(--accent);
+        border-bottom: 1px dashed var(--border);
+        padding-bottom: 5px;
+        margin-top: 15px;
+        margin-bottom: 10px;
+        font-size: 16px;
+      }
+      #geminiAnalysisContent p {
+        margin-bottom: 10px;
+        line-height: 1.5;
+      }
+      #geminiAnalysisContent strong {
+        color: white;
+        font-weight: 600;
+      }
+      #geminiAnalysisContent ul {
+        list-style: disc;
+        padding-left: 20px;
+        margin-bottom: 15px;
+      }
+      #geminiAnalysisContent li {
+        margin-bottom: 5px;
+      }
+      #geminiAnalysisContent code {
+        background: #444;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 13px;
+        color: #a9ff00; /* HIGH CONTRAST COLOR FOR CODE TEXT */
+      }
+      #geminiAnalysisContent pre {
+        background: #1e1e30; /* Darker pre background */
+        padding: 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 10px 0;
+        font-size: 13px;
+        border: 1px solid #353456;
+      }
+
+      /* Recent Files Sidebar */
+      .recent-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px; /* More padding */
+        border-bottom: 1px solid #333;
+        cursor: pointer;
+        font-size: 14px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .recent-item:hover {
+        background: var(--hover);
+      }
+      .delete-recent {
+        color: #666;
+        padding: 4px;
+        border-radius: 4px;
+        transition:
+          color 0.15s,
+          background 0.15s;
+      }
+      .delete-recent:hover {
+        color: #ff6e6e;
+        background: #353456;
+      }
+
+      /* Landing Page Recent Card */
+      .landing-recent-card {
+        background: var(--bg-sidebar);
+        border: 1px solid var(--border);
+        padding: 15px;
+        border-radius: 10px; /* More rounded */
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      }
+      .landing-recent-card:hover {
+        background: #2a2d45;
+        border-color: var(--accent);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 15px rgba(0, 170, 255, 0.2);
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <!-- Main Layout -->
     <div class="flex h-full flex-col">
-        <!-- Header -->
-        <!-- Updated Header styling with new colors and shadow -->
-        <header id="header" class="h-14 bg-[var(--bg-header)] flex items-center justify-between px-6 shadow-xl z-10 border-b border-[var(--border)] hidden">
-            <div class="flex items-center gap-3">
-                <span class="material-icons text-[var(--accent)] text-2xl">description</span>
-                <h1 class="font-bold text-lg text-[var(--text-main)]">DOCX Internals Viewer</h1>
-            </div>
-            <div class="flex items-center gap-4">
-                <button id="uploadBtn" class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-md hover:shadow-lg">
-                    <span class="material-icons text-[18px]">upload_file</span> Open .docx
-                </button>
-            </div>
-        </header>
-
-        <!-- Body -->
-        <div class="flex flex-1 overflow-hidden p-3 bg-[var(--bg-dark)]">
-            <!-- Sidebar -->
-            <div id="mainSidebar" class="w-72 bg-[var(--bg-sidebar)] flex flex-col border border-[var(--border)] rounded-lg shadow-xl mr-3 hidden">
-                <div class="p-3 border-b border-[var(--border)]">
-                    <input type="text" id="fileSearch" placeholder="Filter files..." class="w-full bg-[#3c3c5e] text-white text-sm px-3 py-2 rounded-md border border-transparent focus:border-[var(--accent)] outline-none transition">
-                </div>
-                
-                <!-- Tab Switcher for Sidebar -->
-                <div class="flex border-b border-[var(--border)] text-sm">
-                    <button id="tabTree" class="flex-1 py-3 bg-[var(--bg-dark)] text-white font-medium border-t-2 border-[var(--accent)] rounded-tl-lg">Files</button>
-                    <button id="tabRecent" class="flex-1 py-3 bg-[var(--bg-sidebar)] text-gray-400 hover:text-white border-t-2 border-transparent">Recent</button>
-                </div>
-
-                <div id="sidebarContent" class="flex-1 overflow-y-auto">
-                    <div id="fileTree" class="file-tree p-3 text-sm">
-                        <div class="text-gray-500 text-center mt-10 text-xs italic">No file loaded</div>
-                    </div>
-                    <div id="recentFilesList" class="hidden">
-                        <!-- Recent files injected here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Editor Area (Split Manager Container) -->
-            <!-- The editor wrapper now centers content if nothing is loaded -->
-            <div id="editorWrapper" class="flex-1 bg-[var(--bg-dark)] relative flex overflow-hidden">
-                <!-- Landing Page / Welcome Section -->
-                <div id="welcomeSection" class="absolute inset-0 bg-[var(--bg-dark)] flex flex-col items-center justify-center z-20">
-                    <div class="max-w-3xl w-full px-6 py-10 flex flex-col items-center">
-                        <!-- Hero -->
-                        <div class="w-24 h-24 bg-gradient-to-br from-[var(--accent)] to-[#007acc] rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-900/50 mb-8 transform hover:rotate-2 transition-transform">
-                            <span class="material-icons text-white text-6xl">description</span>
-                        </div>
-                        <h1 class="text-4xl font-extrabold text-gray-100 mb-4 text-center">DOCX Internals Viewer</h1>
-                        <p class="text-gray-400 text-center mb-10 max-w-xl text-lg leading-relaxed">
-                            A forensic tool for exploring the **Open XML** structure of Word documents. Inspect XML, view assets, and analyze the file hierarchy entirely in your browser.
-                        </p>
-
-                        <!-- Main Action -->
-                        <button id="landingUploadBtn" class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-10 py-4 rounded-xl font-semibold text-xl flex items-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl mb-16">
-                            <span class="material-icons text-2xl">upload_file</span>
-                            Start Exploring
-                        </button>
-
-                        <!-- Recent Files Section on Landing -->
-                        <div id="landingRecentContainer" class="w-full hidden">
-                            <div class="flex items-center justify-between mb-5 border-b border-[var(--border)] pb-3">
-                                <h3 class="text-gray-400 text-sm font-bold uppercase tracking-widest">Recent Documents</h3>
-                                <span class="text-xs text-gray-600">Stored locally in browser</span>
-                            </div>
-                            <div id="landingRecentList" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <!-- Injected via JS -->
-                            </div>
-                        </div>
-
-                        <!-- Footer Features -->
-                        <div class="mt-6 grid grid-cols-3 gap-8 text-center w-full border-t border-[var(--border)] pt-10">
-                            <div>
-                                <span class="material-icons text-[var(--accent)] mb-3 text-3xl">lock</span>
-                                <h4 class="text-base font-semibold text-gray-300">Privacy First</h4>
-                                <p class="text-sm text-gray-500 mt-1">All file processing occurs entirely offline within your browser.</p>
-                            </div>
-                            <div>
-                                <span class="material-icons text-[#ff6e6e] mb-3 text-3xl">code</span>
-                                <h4 class="text-base font-semibold text-gray-300">Intelligent XML</h4>
-                                <p class="text-sm text-gray-500 mt-1">Auto-formatted XML with Monaco syntax highlighting and analysis features.</p>
-                            </div>
-                            <div>
-                                <span class="material-icons text-[#7a81ff] mb-3 text-3xl">bolt</span>
-                                <h4 class="text-base font-semibold text-gray-300">Modern Toolkit</h4>
-                                <p class="text-sm text-gray-500 mt-1">Utilizes JSZip and Web APIs for fast, efficient document extraction.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- Header -->
+      <!-- Updated Header styling with new colors and shadow -->
+      <header
+        id="header"
+        class="h-14 bg-[var(--bg-header)] flex items-center justify-between px-6 shadow-xl z-10 border-b border-[var(--border)] hidden"
+      >
+        <div class="flex items-center gap-3">
+          <span class="material-icons text-[var(--accent)] text-2xl"
+            >description</span
+          >
+          <h1 class="font-bold text-lg text-[var(--text-main)]">
+            DOCX Internals Viewer
+          </h1>
         </div>
+        <div class="flex items-center gap-4">
+          <button
+            id="uploadBtn"
+            class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
+          >
+            <span class="material-icons text-[18px]">upload_file</span> Open
+            .docx
+          </button>
+        </div>
+      </header>
+
+      <!-- Body -->
+      <div class="flex flex-1 overflow-hidden p-3 bg-[var(--bg-dark)]">
+        <!-- Sidebar -->
+        <div
+          id="mainSidebar"
+          class="w-72 bg-[var(--bg-sidebar)] flex flex-col border border-[var(--border)] rounded-lg shadow-xl mr-3 hidden"
+        >
+          <div class="p-3 border-b border-[var(--border)]">
+            <input
+              type="text"
+              id="fileSearch"
+              placeholder="Filter files..."
+              class="w-full bg-[#3c3c5e] text-white text-sm px-3 py-2 rounded-md border border-transparent focus:border-[var(--accent)] outline-none transition"
+            />
+          </div>
+
+          <div id="sidebarContent" class="flex-1 overflow-y-auto">
+            <div id="fileTree" class="file-tree p-3 text-sm">
+              <div class="text-gray-500 text-center mt-10 text-xs italic">
+                No file loaded
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Area (Split Manager Container) -->
+        <!-- The editor wrapper now centers content if nothing is loaded -->
+        <div
+          id="editorWrapper"
+          class="flex-1 bg-[var(--bg-dark)] relative flex overflow-hidden"
+        >
+          <!-- Landing Page / Welcome Section -->
+          <div
+            id="welcomeSection"
+            class="absolute inset-0 bg-[var(--bg-dark)] flex flex-col items-center justify-center z-20"
+          >
+            <div class="max-w-3xl w-full px-6 py-10 flex flex-col items-center">
+              <!-- Hero -->
+              <div
+                class="w-24 h-24 bg-gradient-to-br from-[var(--accent)] to-[#007acc] rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-900/50 mb-8 transform hover:rotate-2 transition-transform"
+              >
+                <span class="material-icons text-white text-6xl"
+                  >description</span
+                >
+              </div>
+              <h1
+                class="text-4xl font-extrabold text-gray-100 mb-4 text-center"
+              >
+                DOCX Internals Viewer
+              </h1>
+              <p
+                class="text-gray-400 text-center mb-10 max-w-xl text-lg leading-relaxed"
+              >
+                A forensic tool for exploring the **Open XML** structure of Word
+                documents. Inspect XML, view assets, and analyze the file
+                hierarchy entirely in your browser.
+              </p>
+
+              <!-- Main Action -->
+              <button
+                id="landingUploadBtn"
+                class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-10 py-4 rounded-xl font-semibold text-xl flex items-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl mb-16"
+              >
+                <span class="material-icons text-2xl">upload_file</span>
+                Start Exploring
+              </button>
+
+              <!-- Recent Files Section on Landing -->
+              <div id="landingRecentContainer" class="w-full hidden">
+                <div
+                  class="flex items-center justify-between mb-5 border-b border-[var(--border)] pb-3"
+                >
+                  <h3
+                    class="text-gray-400 text-sm font-bold uppercase tracking-widest"
+                  >
+                    Recent Documents
+                  </h3>
+                  <span class="text-xs text-gray-600"
+                    >Stored locally in browser</span
+                  >
+                </div>
+                <div
+                  id="landingRecentList"
+                  class="grid grid-cols-1 md:grid-cols-3 gap-4"
+                >
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- Footer Features -->
+              <div
+                class="mt-6 grid grid-cols-3 gap-8 text-center w-full border-t border-[var(--border)] pt-10"
+              >
+                <div>
+                  <span
+                    class="material-icons text-[var(--accent)] mb-3 text-3xl"
+                    >lock</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    Privacy First
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    All file processing occurs entirely offline within your
+                    browser.
+                  </p>
+                </div>
+                <div>
+                  <span class="material-icons text-[#ff6e6e] mb-3 text-3xl"
+                    >code</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    Intelligent XML
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    Auto-formatted XML with Monaco syntax highlighting and
+                    analysis features.
+                  </p>
+                </div>
+                <div>
+                  <span class="material-icons text-[#7a81ff] mb-3 text-3xl"
+                    >bolt</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    Modern Toolkit
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    Utilizes JSZip and Web APIs for fast, efficient document
+                    extraction.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay">
-        <div class="spinner mb-4"></div>
-        <div id="loadingText" class="text-white font-medium">Processing...</div>
+      <div class="spinner mb-4"></div>
+      <div id="loadingText" class="text-white font-medium">Processing...</div>
     </div>
-    
+
     <!-- LLM Analysis Box -->
     <div id="geminiAnalysisBox" class="hidden">
-        <h3>
-            DOCX XML Analysis ✨
-            <button id="closeAnalysisBtn" class="material-icons text-white hover:text-gray-300 text-[20px] ml-2">close</button>
-        </h3>
-        <div id="geminiAnalysisContent" class="flex-1">
-            <!-- Analysis result injected here -->
-        </div>
+      <h3>
+        DOCX XML
+        <button
+          id="closeAnalysisBtn"
+          class="material-icons text-white hover:text-gray-300 text-[20px] ml-2"
+        >
+          close
+        </button>
+      </h3>
+      <div id="geminiAnalysisContent" class="flex-1">
+        <!-- Analysis result injected here -->
+      </div>
     </div>
 
     <!-- Fullscreen Drag Overlay -->
-    <div id="dragOverlay" class="fixed inset-0 bg-black bg-opacity-80 z-40 hidden flex justify-center items-center text-white text-2xl border-4 border-[var(--accent)] border-dashed m-6 rounded-2xl">
-        <span class="material-icons text-5xl mr-4 text-[var(--accent)]">file_upload</span>
-        Drop File to Open
+    <div
+      id="dragOverlay"
+      class="fixed inset-0 bg-black bg-opacity-80 z-40 hidden flex justify-center items-center text-white text-2xl border-4 border-[var(--accent)] border-dashed m-6 rounded-2xl"
+    >
+      <span class="material-icons text-5xl mr-4 text-[var(--accent)]"
+        >file_upload</span
+      >
+      Drop File to Open
     </div>
 
     <script>
-        // --- GLOBAL STATE ---
-        const els = {
-            mainSidebar: document.getElementById('mainSidebar'),
-            header: document.getElementById('header'),
-            fileTree: document.getElementById('fileTree'),
-            recentList: document.getElementById('recentFilesList'),
-            landingRecentList: document.getElementById('landingRecentList'),
-            landingRecentContainer: document.getElementById('landingRecentContainer'),
-            editorWrapper: document.getElementById('editorWrapper'),
-            loading: document.getElementById('loadingOverlay'),
-            loadingText: document.getElementById('loadingText'),
-            uploadBtn: document.getElementById('uploadBtn'),
-            landingUploadBtn: document.getElementById('landingUploadBtn'),
-            search: document.getElementById('fileSearch'),
-            welcome: document.getElementById('welcomeSection'),
-            dragOverlay: document.getElementById('dragOverlay'),
-            tabTree: document.getElementById('tabTree'),
-            tabRecent: document.getElementById('tabRecent'),
-            sidebarContent: document.getElementById('sidebarContent'),
-            geminiAnalysisBox: document.getElementById('geminiAnalysisBox'),
-            geminiAnalysisContent: document.getElementById('geminiAnalysisContent'),
-            closeAnalysisBtn: document.getElementById('closeAnalysisBtn')
-        };
+      // --- GLOBAL STATE ---
+      const els = {
+        mainSidebar: document.getElementById("mainSidebar"),
+        header: document.getElementById("header"),
+        fileTree: document.getElementById("fileTree"),
+        landingRecentList: document.getElementById("landingRecentList"),
+        landingRecentContainer: document.getElementById(
+          "landingRecentContainer",
+        ),
+        editorWrapper: document.getElementById("editorWrapper"),
+        loading: document.getElementById("loadingOverlay"),
+        loadingText: document.getElementById("loadingText"),
+        uploadBtn: document.getElementById("uploadBtn"),
+        landingUploadBtn: document.getElementById("landingUploadBtn"),
+        search: document.getElementById("fileSearch"),
+        welcome: document.getElementById("welcomeSection"),
+        dragOverlay: document.getElementById("dragOverlay"),
+        sidebarContent: document.getElementById("sidebarContent"),
+        geminiAnalysisBox: document.getElementById("geminiAnalysisBox"),
+        geminiAnalysisContent: document.getElementById("geminiAnalysisContent"),
+        closeAnalysisBtn: document.getElementById("closeAnalysisBtn"),
+      };
 
-        let currentZip = null;
-        let zipFilesMap = {}; // Map of path -> JSZip object
-        let fileCache = {}; // In-memory cache of text/blobs
-        let currentDocName = "";
-        let blobUrls = []; // Array to track image Blob URLs for cleanup
-        
-        // Function to safely escape HTML special characters
-        const escapeHtml = (str) => {
-            if (typeof str !== 'string') return str;
-            return str.replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;')
-                      .replace(/"/g, '&quot;')
-                      .replace(/'/g, '&#39;');
-        };
+      let currentZip = null;
+      let zipFilesMap = {}; // Map of path -> JSZip object
+      let fileCache = {}; // In-memory cache of text/blobs
+      let currentDocName = "";
+      let blobUrls = []; // Array to track image Blob URLs for cleanup
 
-        // --- MONACO LOADER ---
-        function loadMonaco() {
-            return new Promise((resolve, reject) => {
-                if (window.monaco) return resolve();
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js';
-                script.onload = () => {
-                    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
-                    require(['vs/editor/editor.main'], () => {
-                        registerGlobalMonacoFeatures();
-                        resolve();
-                    });
-                };
-                script.onerror = reject;
-                document.body.appendChild(script);
+      // Function to safely escape HTML special characters
+      const escapeHtml = (str) => {
+        if (typeof str !== "string") return str;
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      };
+
+      // --- MONACO LOADER ---
+      function loadMonaco() {
+        return new Promise((resolve, reject) => {
+          if (window.monaco) return resolve();
+          const script = document.createElement("script");
+          script.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js";
+          script.onload = () => {
+            require.config({
+              paths: {
+                vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs",
+              },
             });
-        }
+            require(["vs/editor/editor.main"], () => {
+              registerGlobalMonacoFeatures();
+              resolve();
+            });
+          };
+          script.onerror = reject;
+          document.body.appendChild(script);
+        });
+      }
 
-        // --- MONACO HELPERS ---
-        function registerGlobalMonacoFeatures() {
-            if (!window.monaco || window.monacoXmlFoldingRegistered) return;
-            monaco.languages.registerFoldingRangeProvider("xml", {
-                provideFoldingRanges: function (model) {
-                    const ranges = [];
-                    const stack = [];
-                    for (let i = 1; i <= model.getLineCount(); i++) {
-                        const line = model.getLineContent(i).trim();
-                        const open = line.match(/^<([a-zA-Z0-9:_-]+)(\s|>|$)/);
-                        const close = line.match(/^<\/([a-zA-Z0-9:_-]+)>/);
-                        if (open && !line.endsWith("/>")) stack.push({ tag: open[1], start: i });
-                        else if (close && stack.length > 0) {
-                            const last = stack.pop();
-                            if (last.tag === close[1] && i > last.start) {
-                                ranges.push({ start: last.start, end: i, kind: monaco.languages.FoldingRangeKind.Region });
-                            }
-                        }
-                    }
-                    return ranges;
+      // --- MONACO HELPERS ---
+      function registerGlobalMonacoFeatures() {
+        if (!window.monaco || window.monacoXmlFoldingRegistered) return;
+        monaco.languages.registerFoldingRangeProvider("xml", {
+          provideFoldingRanges: function (model) {
+            const ranges = [];
+            const stack = [];
+            for (let i = 1; i <= model.getLineCount(); i++) {
+              const line = model.getLineContent(i).trim();
+              const open = line.match(/^<([a-zA-Z0-9:_-]+)(\s|>|$)/);
+              const close = line.match(/^<\/([a-zA-Z0-9:_-]+)>/);
+              if (open && !line.endsWith("/>"))
+                stack.push({ tag: open[1], start: i });
+              else if (close && stack.length > 0) {
+                const last = stack.pop();
+                if (last.tag === close[1] && i > last.start) {
+                  ranges.push({
+                    start: last.start,
+                    end: i,
+                    kind: monaco.languages.FoldingRangeKind.Region,
+                  });
                 }
+              }
+            }
+            return ranges;
+          },
+        });
+        window.monacoXmlFoldingRegistered = true;
+      }
+
+      // --- GEMINI API INTEGRATION ---
+      const systemPrompt =
+        "You are a specialized Open XML (DOCX) expert referencing the Ecma-376 schema standards. Your task is to provide a comprehensive, structured analysis of the provided XML snippet. For each unique element (tag) and attribute in the snippet, clearly explain its purpose and its role within the DOCX document structure. Use the following Markdown structure precisely: start with a summary, then use '#### Elements (Tags)' and '#### Attributes' headings, and use lists for explanations. Ensure all explanations are clear and user-friendly. Avoid introductory or concluding conversational phrases, just provide the analysis content.";
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+      async function callGeminiApi(userQuery) {
+        const payload = {
+          contents: [{ parts: [{ text: userQuery }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+        };
+
+        let response;
+        let attempt = 0;
+        const maxAttempts = 5;
+
+        while (attempt < maxAttempts) {
+          try {
+            response = await fetch(apiUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
             });
-            window.monacoXmlFoldingRegistered = true;
+
+            if (response.ok) {
+              const result = await response.json();
+              const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+              return text || "Error: Received empty response from the model.";
+            } else if (response.status === 429) {
+              // Rate limit exceeded, apply exponential backoff
+              attempt++;
+              const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+              if (attempt < maxAttempts) {
+                console.warn(
+                  `[Gemini API] Rate limit hit. Retrying in ${Math.round(delay / 1000)}s...`,
+                );
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              } else {
+                throw new Error(
+                  "Maximum retry attempts reached due to rate limiting.",
+                );
+              }
+            } else {
+              throw new Error(
+                `API returned status ${response.status}: ${response.statusText}`,
+              );
+            }
+          } catch (error) {
+            // Non-rate limit error or fetch error
+            console.error("[Gemini API Error]", error);
+            return `**An error occurred:** Could not connect to the analysis service. (${error.message})`;
+          }
         }
+      }
 
-        // --- GEMINI API INTEGRATION ---
-        const systemPrompt = "You are a specialized Open XML (DOCX) expert referencing the Ecma-376 schema standards. Your task is to provide a comprehensive, structured analysis of the provided XML snippet. For each unique element (tag) and attribute in the snippet, clearly explain its purpose and its role within the DOCX document structure. Use the following Markdown structure precisely: start with a summary, then use '#### Elements (Tags)' and '#### Attributes' headings, and use lists for explanations. Ensure all explanations are clear and user-friendly. Avoid introductory or concluding conversational phrases, just provide the analysis content.";
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      function showAnalysis(markdown) {
+        // Sanitize markdown before passing to custom HTML parser (optional but good practice)
+        var converter = new showdown.Converter()
+        els.geminiAnalysisContent.innerHTML = converter.makeHtml(markdown)
+        els.geminiAnalysisBox.classList.remove("hidden");
+        // Force reflow and add visible class
+        void els.geminiAnalysisBox.offsetWidth;
+        els.geminiAnalysisBox.classList.add("visible");
+      }
 
-        async function callGeminiApi(userQuery) {
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
+      function hideAnalysis() {
+        els.geminiAnalysisBox.classList.remove("visible");
+        setTimeout(() => {
+          els.geminiAnalysisBox.classList.add("hidden");
+          els.geminiAnalysisContent.innerHTML = "";
+        }, 300); // Wait for transition
+      }
+
+      els.closeAnalysisBtn.onclick = hideAnalysis;
+
+      // --- INDEXEDDB (Persistence) ---
+      const DB_NAME = "DocxViewerDB";
+      const DB_VERSION = 2;
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("files"))
+              db.createObjectStore("files", { keyPath: "id" }); // id = docName + path
+            if (!db.objectStoreNames.contains("recents"))
+              db.createObjectStore("recents", { keyPath: "name" });
+          };
+          req.onsuccess = (e) => resolve(e.target.result);
+          req.onerror = (e) => {
+            console.error(
+              "[IndexedDB] Failed to open database:",
+              e.target.error,
+            );
+            reject(e.target.error);
+          };
+        });
+      }
+
+      async function saveRecent(name, arrayBuffer) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction("recents", "readwrite");
+          tx.objectStore("recents").put({
+            name,
+            data: arrayBuffer,
+            timestamp: Date.now(),
+          });
+
+          return new Promise((resolve) => {
+            tx.oncomplete = () => {
+              console.log(`[IndexedDB Success] Saved recent file: ${name}`);
+              resolve();
             };
-
-            let response;
-            let attempt = 0;
-            const maxAttempts = 5;
-
-            while (attempt < maxAttempts) {
-                try {
-                    response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.ok) {
-                        const result = await response.json();
-                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                        return text || "Error: Received empty response from the model.";
-                    } else if (response.status === 429) {
-                        // Rate limit exceeded, apply exponential backoff
-                        attempt++;
-                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-                        if (attempt < maxAttempts) {
-                            console.warn(`[Gemini API] Rate limit hit. Retrying in ${Math.round(delay / 1000)}s...`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        } else {
-                            throw new Error("Maximum retry attempts reached due to rate limiting.");
-                        }
-                    } else {
-                        throw new Error(`API returned status ${response.status}: ${response.statusText}`);
-                    }
-                } catch (error) {
-                    // Non-rate limit error or fetch error
-                    console.error("[Gemini API Error]", error);
-                    return `**An error occurred:** Could not connect to the analysis service. (${error.message})`;
-                }
-            }
+            tx.onerror = (e) => {
+              console.error(
+                `[IndexedDB Error] Failed to save recent file: ${name}`,
+                e.target.error,
+              );
+              resolve();
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for saveRecent.",
+            e,
+          );
         }
-        
-        // Converts Markdown to basic HTML for display, with improved list and code handling.
-        function markdownToHtml(md) {
-            // 1. Sanitize input: Replace Windows line endings and trim
-            let html = md.replace(/\r/g, '').trim();
+      }
 
-            // 2. Pre-process block elements
-            
-            // Code Blocks (```lang\ncode\n```) -> <pre>
-            html = html.replace(/```(.*?)\n([\s\S]*?)```/g, (match, lang, code) => {
-                const language = lang.trim() || 'plaintext';
-                // Escape HTML characters within the code block content
-                const escapedCode = escapeHtml(code);
-                return `<pre class="language-${language}">${escapedCode.trim()}</pre>\n\n`;
-            });
-
-            // 3. Process headers, emphasis, and inline code
-            
-            // H4 for specific breakdown headings (####)
-            html = html.replace(/^#{4}\s*(.*)$/gm, '<h4>$1</h4>');
-            // H3/H2/H1 (###, ##, #)
-            html = html.replace(/^#+\s*(.*)$/gm, '<h3>$1</h3>');
-
-            // Inline Code (`code`) -> <code>. Crucially, escaping the content here
-            html = html.replace(/`(.*?)`/g, (match, code) => {
-                const escapedCode = escapeHtml(code);
-                return `<code>${escapedCode}</code>`;
-            });
-            
-            // Bold (**bold**) -> <strong>
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            // Italic (*italic*) -> <em>
-            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
-            // 4. Process Lists (Handle `* ` or `- `) -- IMPROVED LOGIC
-            html = html.replace(/(\n|^)((?:[*-]\s+.*(?:\n|$))+)/gm, (match, before, listBlock) => {
-                // listBlock is the sequence of list items
-                let listContent = listBlock.trim().split('\n')
-                    .filter(line => line.match(/^[*-]\s+/)) // Filter only lines that are actual list items
-                    .map(line => {
-                        // Remove the list marker and surrounding whitespace
-                        let item = line.replace(/^[*-]\s+/, '').trim();
-                        
-                        // Process inline elements within list items *again*
-                        item = item.replace(/`(.*?)`/g, (m, c) => `<code>${escapeHtml(c)}</code>`);
-                        item = item.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-                        return `<li>${item}</li>`;
-                    }).join('');
-                
-                // Only wrap if there are actual list items
-                return listContent.length > 0 ? `${before}<ul>${listContent}</ul>\n\n` : '';
-            });
-
-            // 5. Process Paragraphs (Lines separated by two or more newlines)
-            html = html.split('\n\n').map(p => {
-                p = p.trim();
-                if (p === '') return '';
-                // Check if already wrapped in a block tag (h, ul, pre, blockquote)
-                if (p.startsWith('<h') || p.startsWith('<ul>') || p.startsWith('<pre') || p.startsWith('<block')) {
-                    return p;
-                }
-                return `<p>${p}</p>`;
-            }).join('');
-            
-            return html;
+      async function getRecents() {
+        try {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction("recents", "readonly");
+            const req = tx.objectStore("recents").getAll();
+            req.onsuccess = () =>
+              resolve(req.result.sort((a, b) => b.timestamp - a.timestamp));
+            req.onerror = (e) => {
+              console.error(
+                "[IndexedDB Error] Failed to get recent files.",
+                e.target.error,
+              );
+              resolve([]);
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for getRecents.",
+            e,
+          );
+          return [];
         }
+      }
 
-        function showAnalysis(markdown) {
-            // Sanitize markdown before passing to custom HTML parser (optional but good practice)
-            els.geminiAnalysisContent.innerHTML = markdownToHtml(markdown);
-            els.geminiAnalysisBox.classList.remove('hidden');
-            // Force reflow and add visible class
-            void els.geminiAnalysisBox.offsetWidth; 
-            els.geminiAnalysisBox.classList.add('visible');
+      async function deleteRecent(name) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction("recents", "readwrite");
+          tx.objectStore("recents").delete(name);
+
+          return new Promise((resolve) => {
+            tx.oncomplete = () => {
+              console.log(`[IndexedDB Success] Removed recent file: ${name}`);
+              resolve();
+            };
+            tx.onerror = (e) => {
+              console.error(
+                `[IndexedDB Error] Failed to delete recent file: ${name}`,
+                e.target.error,
+              );
+              resolve();
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for deleteRecent.",
+            e,
+          );
         }
+      }
 
-        function hideAnalysis() {
-            els.geminiAnalysisBox.classList.remove('visible');
-            setTimeout(() => {
-                els.geminiAnalysisBox.classList.add('hidden');
-                els.geminiAnalysisContent.innerHTML = '';
-            }, 300); // Wait for transition
+      // --- UTILS ---
+      function formatXML(xml) {
+        let formatted = "";
+        let reg = /(>)(<)(\/*)/g;
+        xml = xml.replace(reg, "$1\r\n$2$3");
+        let pad = 0;
+        xml.split("\r\n").forEach((node) => {
+          let indent = 0;
+          if (node.match(/.+<\/\w[^>]*>$/)) indent = 0;
+          else if (node.match(/^<\/\w/)) {
+            if (pad !== 0) pad -= 1;
+          } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) indent = 1;
+          else indent = 0;
+          let padding = "";
+          for (let i = 0; i < pad; i++) padding += "  ";
+          formatted += padding + node + "\r\n";
+          pad += indent;
+        });
+        return formatted;
+      }
+
+      function isImage(path) {
+        return /\.(png|jpeg|jpg|gif|bmp|webp)$/i.test(path);
+      }
+
+      function getIconForFile(path) {
+        if (isImage(path)) return "image";
+        if (path.endsWith(".xml") || path.endsWith(".rels")) return "code";
+        return "description";
+      }
+
+      function clearObjectUrls() {
+        blobUrls.forEach((url) => URL.revokeObjectURL(url));
+        blobUrls = [];
+      }
+
+      // --- SPLIT MANAGER & PANE CLASSES ---
+      class SplitPane {
+        constructor(id, container) {
+          this.id = id;
+          this.container = container;
+          this.tabs = [];
+          this.activeTabPath = null;
+          this.editor = null;
+          this.element = null;
+          this.isXml = false; // Track file type
         }
 
-        els.closeAnalysisBtn.onclick = hideAnalysis;
-
-
-        // --- INDEXEDDB (Persistence) ---
-        const DB_NAME = 'DocxViewerDB';
-        const DB_VERSION = 2;
-
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                const req = indexedDB.open(DB_NAME, DB_VERSION);
-                req.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id' }); // id = docName + path
-                    if (!db.objectStoreNames.contains('recents')) db.createObjectStore('recents', { keyPath: 'name' });
-                };
-                req.onsuccess = (e) => resolve(e.target.result);
-                req.onerror = (e) => {
-                    console.error("[IndexedDB] Failed to open database:", e.target.error);
-                    reject(e.target.error);
-                };
-            });
-        }
-
-        async function saveRecent(name, arrayBuffer) {
-            try {
-                const db = await openDB();
-                const tx = db.transaction('recents', 'readwrite');
-                tx.objectStore('recents').put({ name, data: arrayBuffer, timestamp: Date.now() });
-                
-                return new Promise(resolve => {
-                    tx.oncomplete = () => {
-                        console.log(`[IndexedDB Success] Saved recent file: ${name}`);
-                        resolve();
-                    };
-                    tx.onerror = (e) => {
-                        console.error(`[IndexedDB Error] Failed to save recent file: ${name}`, e.target.error);
-                        resolve(); 
-                    };
-                });
-            } catch (e) {
-                console.error("[IndexedDB Critical Error] Could not initialize DB for saveRecent.", e);
-            }
-        }
-
-        async function getRecents() {
-            try {
-                const db = await openDB();
-                return new Promise(resolve => {
-                    const tx = db.transaction('recents', 'readonly');
-                    const req = tx.objectStore('recents').getAll();
-                    req.onsuccess = () => resolve(req.result.sort((a, b) => b.timestamp - a.timestamp));
-                    req.onerror = (e) => {
-                        console.error("[IndexedDB Error] Failed to get recent files.", e.target.error);
-                        resolve([]); 
-                    };
-                });
-            } catch (e) {
-                console.error("[IndexedDB Critical Error] Could not initialize DB for getRecents.", e);
-                return [];
-            }
-        }
-
-        async function deleteRecent(name) {
-            try {
-                const db = await openDB();
-                const tx = db.transaction('recents', 'readwrite');
-                tx.objectStore('recents').delete(name);
-                
-                return new Promise(resolve => {
-                    tx.oncomplete = () => {
-                        console.log(`[IndexedDB Success] Removed recent file: ${name}`);
-                        resolve();
-                    };
-                    tx.onerror = (e) => {
-                        console.error(`[IndexedDB Error] Failed to delete recent file: ${name}`, e.target.error);
-                        resolve();
-                    };
-                });
-            } catch (e) {
-                console.error("[IndexedDB Critical Error] Could not initialize DB for deleteRecent.", e);
-            }
-        }
-
-        // --- UTILS ---
-        function formatXML(xml) {
-            let formatted = '';
-            let reg = /(>)(<)(\/*)/g;
-            xml = xml.replace(reg, '$1\r\n$2$3');
-            let pad = 0;
-            xml.split('\r\n').forEach(node => {
-                let indent = 0;
-                if (node.match(/.+<\/\w[^>]*>$/)) indent = 0;
-                else if (node.match(/^<\/\w/)) { if (pad !== 0) pad -= 1; }
-                else if (node.match(/^<\w[^>]*[^\/]>.*$/)) indent = 1;
-                else indent = 0;
-                let padding = '';
-                for (let i = 0; i < pad; i++) padding += '  ';
-                formatted += padding + node + '\r\n';
-                pad += indent;
-            });
-            return formatted;
-        }
-
-        function isImage(path) {
-            return /\.(png|jpeg|jpg|gif|bmp|webp)$/i.test(path);
-        }
-
-        function getIconForFile(path) {
-            if (isImage(path)) return 'image';
-            if (path.endsWith('.xml') || path.endsWith('.rels')) return 'code';
-            return 'description';
-        }
-
-        function clearObjectUrls() {
-            blobUrls.forEach(url => URL.revokeObjectURL(url));
-            blobUrls = [];
-        }
-
-        // --- SPLIT MANAGER & PANE CLASSES ---
-        class SplitPane {
-            constructor(id, container) {
-                this.id = id;
-                this.container = container;
-                this.tabs = [];
-                this.activeTabPath = null;
-                this.editor = null;
-                this.element = null;
-                this.isXml = false; // Track file type
-            }
-
-            createUI() {
-                const pane = document.createElement('div');
-                pane.className = 'splitPane';
-                pane.innerHTML = `
+        createUI() {
+          const pane = document.createElement("div");
+          pane.className = "splitPane";
+          pane.innerHTML = `
                     <div class="paneHeader">
                         <div class="paneTabsContainer"></div>
                         <div class="paneActions">
@@ -768,144 +1016,161 @@
                         <span class="material-icons text-7xl opacity-10">code</span>
                     </div>
                 `;
-                
-                this.element = pane;
-                this.tabsContainer = pane.querySelector('.paneTabsContainer');
-                this.editorContainer = pane.querySelector('.paneEditorContainer');
-                this.imageContainer = pane.querySelector('.paneImageContainer');
-                this.emptyState = pane.querySelector(`#empty-${this.id}`);
-                this.geminiBtn = pane.querySelector(`#gemini-btn-${this.id}`);
-                
-                pane.addEventListener('mousedown', () => splitManager.setActive(this.id));
-                this.geminiBtn.addEventListener('click', () => this.analyzeSelection());
-                
-                return pane;
+
+          this.element = pane;
+          this.tabsContainer = pane.querySelector(".paneTabsContainer");
+          this.editorContainer = pane.querySelector(".paneEditorContainer");
+          this.imageContainer = pane.querySelector(".paneImageContainer");
+          this.emptyState = pane.querySelector(`#empty-${this.id}`);
+          this.geminiBtn = pane.querySelector(`#gemini-btn-${this.id}`);
+
+          pane.addEventListener("mousedown", () =>
+            splitManager.setActive(this.id),
+          );
+          this.geminiBtn.addEventListener("click", () =>
+            this.analyzeSelection(),
+          );
+
+          return pane;
+        }
+
+        initEditor() {
+          if (this.editor || !window.monaco) return;
+          this.editor = monaco.editor.create(this.editorContainer, {
+            value: "",
+            language: "xml",
+            theme: "vs-dark",
+            automaticLayout: true,
+            readOnly: true,
+            minimap: { enabled: false },
+            fontFamily: 'Consolas, "Courier New", monospace', // Use a standard monospace font
+            fontSize: 14, // Readable font size
+          });
+          this.editor.onDidFocusEditorText(() =>
+            splitManager.setActive(this.id),
+          );
+        }
+
+        async openTab(path, name, content, type) {
+          // Check existing
+          const existing = this.tabs.find((t) => t.path === path);
+          if (existing) {
+            this.setActiveTab(path);
+            return;
+          }
+
+          this.tabs.push({ path, name, content, type });
+          this.renderTabs();
+          this.setActiveTab(path);
+        }
+
+        setActiveTab(path) {
+          this.activeTabPath = path;
+          const tab = this.tabs.find((t) => t.path === path);
+          if (!tab) {
+            this.isXml = false;
+            this.geminiBtn.classList.add("hidden");
+            return;
+          }
+
+          this.isXml = tab.type === "xml";
+          this.geminiBtn.classList.toggle("hidden", !this.isXml);
+
+          this.renderTabs();
+          this.emptyState.style.display = "none";
+
+          if (tab.type === "image") {
+            this.editorContainer.style.display = "none";
+            this.imageContainer.style.display = "flex";
+            this.imageContainer.querySelector("img").src = tab.content; // Blob URL
+          } else {
+            this.imageContainer.style.display = "none";
+            this.editorContainer.style.display = "block";
+            if (!this.editor) this.initEditor();
+
+            if (!this.editor) {
+              this.editorContainer.innerHTML =
+                '<div class="flex items-center justify-center h-full text-gray-500 text-sm">Loading editor...</div>';
+              return;
             }
 
-            initEditor() {
-                if (this.editor || !window.monaco) return;
-                this.editor = monaco.editor.create(this.editorContainer, {
-                    value: '', language: 'xml', theme: 'vs-dark',
-                    automaticLayout: true, readOnly: true, minimap: { enabled: false },
-                    fontFamily: 'Consolas, "Courier New", monospace', // Use a standard monospace font
-                    fontSize: 14 // Readable font size
-                });
-                this.editor.onDidFocusEditorText(() => splitManager.setActive(this.id));
+            const model = this.editor.getModel();
+            const lang = tab.type === "xml" ? "xml" : "plaintext";
+
+            if (model) {
+              monaco.editor.setModelLanguage(model, lang);
+              if (model.getValue() !== tab.content)
+                this.editor.setValue(tab.content);
+            } else {
+              const newModel = monaco.editor.createModel(tab.content, lang);
+              this.editor.setModel(newModel);
             }
+            this.editor.setScrollTop(0);
+          }
+        }
 
-            async openTab(path, name, content, type) {
-                // Check existing
-                const existing = this.tabs.find(t => t.path === path);
-                if (existing) {
-                    this.setActiveTab(path);
-                    return;
-                }
+        async analyzeSelection() {
+          if (!this.editor || !this.isXml) return;
 
-                this.tabs.push({ path, name, content, type });
-                this.renderTabs();
-                this.setActiveTab(path);
-            }
+          const selection = this.editor.getSelection();
+          const selectedText = this.editor
+            .getModel()
+            .getValueInRange(selection)
+            .trim();
 
-            setActiveTab(path) {
-                this.activeTabPath = path;
-                const tab = this.tabs.find(t => t.path === path);
-                if (!tab) {
-                    this.isXml = false;
-                    this.geminiBtn.classList.add('hidden');
-                    return;
-                }
+          if (!selectedText) {
+            showAnalysis(
+              "**Error:** Please select a block of XML code in the editor first.",
+            );
+            return;
+          }
 
-                this.isXml = tab.type === 'xml';
-                this.geminiBtn.classList.toggle('hidden', !this.isXml);
+          els.loadingText.textContent = "Analyzing XML structure...";
+          els.loading.style.display = "flex";
 
+          try {
+            // UPDATED: Formulate the user query to align with the new system prompt requirements.
+            const userQuery = `Analyze the following DOCX Open XML snippet. Provide a comprehensive breakdown of all tags and attributes present:\n\n\`\`\`xml\n${selectedText}\n\`\`\``;
+            const result = await callGeminiApi(userQuery);
 
-                this.renderTabs();
-                this.emptyState.style.display = 'none';
+            showAnalysis(result);
+          } catch (e) {
+            console.error("Gemini analysis failed:", e);
+            showAnalysis(
+              "**Error:** Failed to connect to the analysis service. Check the console for details.",
+            );
+          } finally {
+            els.loading.style.display = "none";
+            els.loadingText.textContent = "Processing..."; // Reset text
+          }
+        }
 
-                if (tab.type === 'image') {
-                    this.editorContainer.style.display = 'none';
-                    this.imageContainer.style.display = 'flex';
-                    this.imageContainer.querySelector('img').src = tab.content; // Blob URL
-                } else {
-                    this.imageContainer.style.display = 'none';
-                    this.editorContainer.style.display = 'block';
-                    if (!this.editor) this.initEditor();
-                    
-                    if (!this.editor) {
-                        this.editorContainer.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500 text-sm">Loading editor...</div>';
-                        return;
-                    }
-                    
-                    const model = this.editor.getModel();
-                    const lang = tab.type === 'xml' ? 'xml' : 'plaintext';
-                    
-                    if (model) {
-                        monaco.editor.setModelLanguage(model, lang);
-                        if(model.getValue() !== tab.content) this.editor.setValue(tab.content);
-                    } else {
-                         const newModel = monaco.editor.createModel(tab.content, lang);
-                         this.editor.setModel(newModel);
-                    }
-                    this.editor.setScrollTop(0);
-                }
-            }
-            
-            async analyzeSelection() {
-                if (!this.editor || !this.isXml) return;
-                
-                const selection = this.editor.getSelection();
-                const selectedText = this.editor.getModel().getValueInRange(selection).trim();
-                
-                if (!selectedText) {
-                    showAnalysis('**Error:** Please select a block of XML code in the editor first.');
-                    return;
-                }
-                
-                els.loadingText.textContent = 'Analyzing XML structure...';
-                els.loading.style.display = 'flex';
-                
-                try {
-                    // UPDATED: Formulate the user query to align with the new system prompt requirements.
-                    const userQuery = `Analyze the following DOCX Open XML snippet. Provide a comprehensive breakdown of all tags and attributes present:\n\n\`\`\`xml\n${selectedText}\n\`\`\``;
-                    const result = await callGeminiApi(userQuery);
-                    
-                    showAnalysis(result);
+        closeTab(path) {
+          const idx = this.tabs.findIndex((t) => t.path === path);
+          if (idx === -1) return;
 
-                } catch (e) {
-                    console.error("Gemini analysis failed:", e);
-                    showAnalysis('**Error:** Failed to connect to the analysis service. Check the console for details.');
-                } finally {
-                    els.loading.style.display = 'none';
-                    els.loadingText.textContent = 'Processing...'; // Reset text
-                }
-            }
+          const isActive = this.activeTabPath === path;
+          this.tabs.splice(idx, 1);
 
-            closeTab(path) {
-                const idx = this.tabs.findIndex(t => t.path === path);
-                if (idx === -1) return;
-                
-                const isActive = this.activeTabPath === path;
-                this.tabs.splice(idx, 1);
+          if (this.tabs.length === 0) {
+            this.activeTabPath = null;
+            this.editorContainer.style.display = "none";
+            this.imageContainer.style.display = "none";
+            this.emptyState.style.display = "flex";
+            this.isXml = false;
+            this.geminiBtn.classList.add("hidden");
+          } else if (isActive) {
+            this.setActiveTab(this.tabs[Math.max(0, idx - 1)].path);
+          }
+          this.renderTabs();
+        }
 
-                if (this.tabs.length === 0) {
-                    this.activeTabPath = null;
-                    this.editorContainer.style.display = 'none';
-                    this.imageContainer.style.display = 'none';
-                    this.emptyState.style.display = 'flex';
-                    this.isXml = false;
-                    this.geminiBtn.classList.add('hidden');
-                } else if (isActive) {
-                    this.setActiveTab(this.tabs[Math.max(0, idx - 1)].path);
-                }
-                this.renderTabs();
-            }
-
-            renderTabs() {
-                this.tabsContainer.innerHTML = '';
-                this.tabs.forEach(tab => {
-                    const el = document.createElement('div');
-                    el.className = `tab ${tab.path === this.activeTabPath ? 'active' : ''}`;
-                    el.innerHTML = `
+        renderTabs() {
+          this.tabsContainer.innerHTML = "";
+          this.tabs.forEach((tab) => {
+            const el = document.createElement("div");
+            el.className = `tab ${tab.path === this.activeTabPath ? "active" : ""}`;
+            el.innerHTML = `
                         <span class="material-icons text-[16px] mr-2 text-gray-400">
                             ${getIconForFile(tab.path)}
                         </span>
@@ -914,346 +1179,372 @@
                         </span>
                         <span class="tab-close material-icons">close</span>
                     `;
-                    el.querySelector('.tab-close').onclick = (e) => {
-                        e.stopPropagation();
-                        this.closeTab(tab.path);
-                    };
-                    el.onclick = () => this.setActiveTab(tab.path);
-                    this.tabsContainer.appendChild(el);
-                });
-            }
+            el.querySelector(".tab-close").onclick = (e) => {
+              e.stopPropagation();
+              this.closeTab(tab.path);
+            };
+            el.onclick = () => this.setActiveTab(tab.path);
+            this.tabsContainer.appendChild(el);
+          });
+        }
+      }
+
+      class SplitManager {
+        constructor() {
+          this.panes = new Map();
+          this.nextId = 1;
+          this.activeId = null;
         }
 
-        class SplitManager {
-            constructor() {
-                this.panes = new Map();
-                this.nextId = 1;
-                this.activeId = null;
-            }
-
-            init(container) {
-                this.container = container;
-                const pane = this.createPane();
-                this.container.appendChild(pane.element);
-                this.setActive(pane.id);
-            }
-
-            createPane() {
-                const pane = new SplitPane(this.nextId++, this.container);
-                pane.createUI();
-                this.panes.set(pane.id, pane);
-                if (window.monaco) pane.initEditor();
-                return pane;
-            }
-
-            setActive(id) {
-                this.panes.forEach(p => p.element.classList.remove('active'));
-                const pane = this.panes.get(id);
-                if (pane) {
-                    pane.element.classList.add('active');
-                    this.activeId = id;
-                }
-            }
-
-            getActive() { return this.panes.get(this.activeId) || this.panes.values().next().value; }
-
-            split(paneId, direction) {
-                const pane = this.panes.get(paneId);
-                if (!pane) return;
-                
-                const newPane = this.createPane();
-                const wrapper = document.createElement('div');
-                wrapper.className = `splitContainer ${direction}`; // Flex container
-                
-                const resizer = document.createElement('div');
-                resizer.className = 'splitResizer';
-                
-                const parent = pane.element.parentElement;
-                parent.replaceChild(wrapper, pane.element);
-                
-                wrapper.appendChild(pane.element);
-                wrapper.appendChild(resizer);
-                wrapper.appendChild(newPane.element);
-                
-                // Setup resize logic
-                this.setupResizer(resizer, wrapper, direction);
-                this.setActive(newPane.id);
-            }
-
-            close(paneId) {
-                if (this.panes.size <= 1) return; // Keep one open
-                const pane = this.panes.get(paneId);
-                if (!pane) return;
-                
-                const parent = pane.element.parentElement;
-                if (parent.classList.contains('splitContainer')) {
-                    // Structure: [PaneA, Resizer, PaneB]
-                    let sibling;
-                    
-                    // Determine which sibling remains
-                    if (pane.element.nextElementSibling && pane.element.nextElementSibling.nextElementSibling) {
-                        // Pane is A, keep B (index 2)
-                        sibling = pane.element.nextElementSibling.nextElementSibling;
-                    } else if (pane.element.previousElementSibling && pane.element.previousElementSibling.previousElementSibling) {
-                        // Pane is B, keep A (index 0)
-                        sibling = pane.element.previousElementSibling.previousElementSibling;
-                    } else {
-                        // Should not happen if size > 1 but safe guard
-                        return;
-                    }
-
-                    if (sibling) {
-                        sibling.style.flex = parent.style.flex;
-                        if (!parent.style.flex) sibling.style.flex = '';
-
-                        const grandParent = parent.parentElement;
-                        grandParent.replaceChild(sibling, parent);
-                    }
-                }
-                
-                // Dispose Monaco editor if exists
-                if (pane.editor) {
-                    pane.editor.dispose();
-                }
-                
-                this.panes.delete(paneId);
-                
-                // Focus another pane
-                if (this.activeId === paneId) {
-                    const next = this.panes.values().next().value;
-                    if (next) this.setActive(next.id);
-                }
-            }
-
-            setupResizer(resizer, container, direction) {
-                let startPos, startSizeA, startSizeB;
-                const elA = container.children[0];
-                const elB = container.children[2]; // 1 is resizer
-
-                const onMouseDown = (e) => {
-                    e.preventDefault();
-                    resizer.classList.add('dragging');
-                    startPos = direction === 'horizontal' ? e.clientX : e.clientY;
-                    startSizeA = direction === 'horizontal' ? elA.offsetWidth : elA.offsetHeight;
-                    startSizeB = direction === 'horizontal' ? elB.offsetWidth : elB.offsetHeight;
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
-                };
-
-                const onMouseMove = (e) => {
-                    const currentPos = direction === 'horizontal' ? e.clientX : e.clientY;
-                    const delta = currentPos - startPos;
-                    const total = startSizeA + startSizeB;
-                    const newA = startSizeA + delta;
-                    const newB = startSizeB - delta;
-                    
-                    if (newA > 50 && newB > 50) {
-                        elA.style.flex = `0 0 ${(newA/total)*100}%`;
-                        elB.style.flex = `0 0 ${(newB/total)*100}%`;
-                    }
-                };
-
-                const onMouseUp = () => {
-                    resizer.classList.remove('dragging');
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
-                };
-
-                resizer.addEventListener('mousedown', onMouseDown);
-            }
+        init(container) {
+          this.container = container;
+          const pane = this.createPane();
+          this.container.appendChild(pane.element);
+          this.setActive(pane.id);
         }
 
-        const splitManager = new SplitManager();
-
-        // --- FILE HANDLING ---
-
-        async function loadFile(file) {
-            els.loading.style.display = 'flex';
-            els.welcome.style.display = 'none';
-            hideAnalysis(); // Hide analysis when new file loads
-            
-            try {
-                let arrayBuffer;
-                let fileName;
-                
-                if (file instanceof File) {
-                    arrayBuffer = await file.arrayBuffer();
-                    fileName = file.name;
-                    // Save and render recents asynchronously
-                    saveRecent(fileName, arrayBuffer).then(renderRecents).catch(console.error);
-                } else {
-                    // Loaded from recent (has name and data)
-                    arrayBuffer = file.data;
-                    fileName = file.name;
-                }
-
-                currentDocName = fileName;
-                document.title = `${fileName} - DOCX Viewer`;
-                
-                // Reset Cache and cleanup URLs
-                clearObjectUrls();
-                fileCache = {};
-                zipFilesMap = {};
-                
-                const zip = await JSZip.loadAsync(arrayBuffer);
-                currentZip = zip;
-
-                // Build Map
-                Object.keys(zip.files).forEach(path => {
-                    if (!zip.files[path].dir) zipFilesMap[path] = zip.files[path];
-                });
-
-                // Build Tree
-                renderFileTree(Object.keys(zipFilesMap));
-
-                // Show sidebar and switch to tree view
-                els.mainSidebar.classList.remove('hidden');
-                els.header.classList.remove('hidden');
-                els.tabTree.click(); 
-            } catch (err) {
-                console.error(err);
-                // Use custom UI instead of alert()
-                showAnalysis('**Error Loading File:** This file could not be processed. Please ensure it is a valid `.docx` file.');
-            } finally {
-                els.loading.style.display = 'none';
-            }
+        createPane() {
+          const pane = new SplitPane(this.nextId++, this.container);
+          pane.createUI();
+          this.panes.set(pane.id, pane);
+          if (window.monaco) pane.initEditor();
+          return pane;
         }
 
-        function renderFileTree(paths) {
-            els.fileTree.innerHTML = '';
-            const root = {};
-
-            // Build hierarchy
-            paths.forEach(path => {
-                const parts = path.split('/');
-                let current = root;
-                parts.forEach((part, i) => {
-                    if (!current[part]) current[part] = (i === parts.length - 1) ? null : {};
-                    current = current[part];
-                });
-            });
-
-            function createNode(obj, container, prefix = '') {
-                const ul = document.createElement('ul');
-                const keys = Object.keys(obj).sort((a, b) => {
-                    const aIsFolder = obj[a] !== null;
-                    const bIsFolder = obj[b] !== null;
-                    if (aIsFolder && !bIsFolder) return -1;
-                    if (!aIsFolder && bIsFolder) return 1;
-                    return a.localeCompare(b);
-                });
-
-                keys.forEach(key => {
-                    const fullPath = prefix ? `${prefix}/${key}` : key;
-                    const li = document.createElement('li');
-                    const div = document.createElement('div');
-                    div.className = 'labelContainer';
-                    
-                    const isFolder = obj[key] !== null;
-                    
-                    let iconStr = isFolder ? 'folder' : getIconForFile(fullPath);
-                    if (isFolder) {
-                        li.className = 'folder';
-                        div.innerHTML = `<span class="arrow">▶</span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
-                        div.onclick = (e) => {
-                            e.stopPropagation();
-                            li.classList.toggle('open');
-                        };
-                        li.appendChild(div);
-                        createNode(obj[key], li, fullPath);
-                    } else {
-                        li.className = `file file-${iconStr}`;
-                        if (iconStr === 'code') li.classList.add('file-xml');
-                        if (iconStr === 'image') li.classList.add('file-image');
-                        
-                        div.innerHTML = `<span class="arrow"></span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
-                        div.onclick = async (e) => {
-                            e.stopPropagation();
-                            document.querySelectorAll('.file-tree li.selected').forEach(el => el.classList.remove('selected'));
-                            li.classList.add('selected');
-                            await openFile(fullPath);
-                        };
-                        li.appendChild(div);
-                    }
-                    ul.appendChild(li);
-                });
-                container.appendChild(ul);
-            }
-
-            createNode(root, els.fileTree);
+        setActive(id) {
+          this.panes.forEach((p) => p.element.classList.remove("active"));
+          const pane = this.panes.get(id);
+          if (pane) {
+            pane.element.classList.add("active");
+            this.activeId = id;
+          }
         }
 
-        async function openFile(path) {
-            const activePane = splitManager.getActive();
-            if (!activePane) return;
-
-            if (fileCache[path]) {
-                activePane.openTab(path, path.split('/').pop(), fileCache[path].content, fileCache[path].type);
-                return;
-            }
-
-            const zipObj = zipFilesMap[path];
-            if (!zipObj) return;
-
-            els.loading.style.display = 'flex';
-            try {
-                let content, type;
-                if (isImage(path)) {
-                    const blob = await zipObj.async('blob');
-                    content = URL.createObjectURL(blob);
-                    blobUrls.push(content); // Add to cleanup list
-                    type = 'image';
-                } else {
-                    const text = await zipObj.async('text');
-                    content = path.endsWith('.xml') || path.endsWith('.rels') ? formatXML(text) : text;
-                    type = path.endsWith('.xml') || path.endsWith('.rels') ? 'xml' : 'text';
-                }
-                
-                fileCache[path] = { content, type };
-                activePane.openTab(path, path.split('/').pop(), content, type);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                els.loading.style.display = 'none';
-            }
+        getActive() {
+          return (
+            this.panes.get(this.activeId) || this.panes.values().next().value
+          );
         }
 
-        async function renderRecents() {
-            const files = await getRecents();
-            els.recentList.innerHTML = '';
-            els.landingRecentList.innerHTML = '';
-            
-            // Update Sidebar
-            if (files.length === 0) {
-                els.recentList.innerHTML = '<div class="p-4 text-gray-500 text-center text-xs">No recent files</div>';
-                els.landingRecentContainer.style.display = 'none';
+        split(paneId, direction) {
+          const pane = this.panes.get(paneId);
+          if (!pane) return;
+
+          const newPane = this.createPane();
+          const wrapper = document.createElement("div");
+          wrapper.className = `splitContainer ${direction}`; // Flex container
+
+          const resizer = document.createElement("div");
+          resizer.className = "splitResizer";
+
+          const parent = pane.element.parentElement;
+          parent.replaceChild(wrapper, pane.element);
+
+          wrapper.appendChild(pane.element);
+          wrapper.appendChild(resizer);
+          wrapper.appendChild(newPane.element);
+
+          // Setup resize logic
+          this.setupResizer(resizer, wrapper, direction);
+          this.setActive(newPane.id);
+        }
+
+        close(paneId) {
+          if (this.panes.size <= 1) return; // Keep one open
+          const pane = this.panes.get(paneId);
+          if (!pane) return;
+
+          const parent = pane.element.parentElement;
+          if (parent.classList.contains("splitContainer")) {
+            // Structure: [PaneA, Resizer, PaneB]
+            let sibling;
+
+            // Determine which sibling remains
+            if (
+              pane.element.nextElementSibling &&
+              pane.element.nextElementSibling.nextElementSibling
+            ) {
+              // Pane is A, keep B (index 2)
+              sibling = pane.element.nextElementSibling.nextElementSibling;
+            } else if (
+              pane.element.previousElementSibling &&
+              pane.element.previousElementSibling.previousElementSibling
+            ) {
+              // Pane is B, keep A (index 0)
+              sibling =
+                pane.element.previousElementSibling.previousElementSibling;
             } else {
-                els.landingRecentContainer.style.display = 'block';
+              // Should not happen if size > 1 but safe guard
+              return;
             }
 
-            files.forEach(file => {
-                // Sidebar Item
-                const div = document.createElement('div');
-                div.className = 'recent-item';
-                div.innerHTML = `
+            if (sibling) {
+              sibling.style.flex = parent.style.flex;
+              if (!parent.style.flex) sibling.style.flex = "";
+
+              const grandParent = parent.parentElement;
+              grandParent.replaceChild(sibling, parent);
+            }
+          }
+
+          // Dispose Monaco editor if exists
+          if (pane.editor) {
+            pane.editor.dispose();
+          }
+
+          this.panes.delete(paneId);
+
+          // Focus another pane
+          if (this.activeId === paneId) {
+            const next = this.panes.values().next().value;
+            if (next) this.setActive(next.id);
+          }
+        }
+
+        setupResizer(resizer, container, direction) {
+          let startPos, startSizeA, startSizeB;
+          const elA = container.children[0];
+          const elB = container.children[2]; // 1 is resizer
+
+          const onMouseDown = (e) => {
+            e.preventDefault();
+            resizer.classList.add("dragging");
+            startPos = direction === "horizontal" ? e.clientX : e.clientY;
+            startSizeA =
+              direction === "horizontal" ? elA.offsetWidth : elA.offsetHeight;
+            startSizeB =
+              direction === "horizontal" ? elB.offsetWidth : elB.offsetHeight;
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+          };
+
+          const onMouseMove = (e) => {
+            const currentPos =
+              direction === "horizontal" ? e.clientX : e.clientY;
+            const delta = currentPos - startPos;
+            const total = startSizeA + startSizeB;
+            const newA = startSizeA + delta;
+            const newB = startSizeB - delta;
+
+            if (newA > 50 && newB > 50) {
+              elA.style.flex = `0 0 ${(newA / total) * 100}%`;
+              elB.style.flex = `0 0 ${(newB / total) * 100}%`;
+            }
+          };
+
+          const onMouseUp = () => {
+            resizer.classList.remove("dragging");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+
+          resizer.addEventListener("mousedown", onMouseDown);
+        }
+      }
+
+      const splitManager = new SplitManager();
+
+      // --- FILE HANDLING ---
+
+      async function loadFile(file) {
+        els.loading.style.display = "flex";
+        els.welcome.style.display = "none";
+        hideAnalysis(); // Hide analysis when new file loads
+
+        try {
+          let arrayBuffer;
+          let fileName;
+
+          if (file instanceof File) {
+            arrayBuffer = await file.arrayBuffer();
+            fileName = file.name;
+            // Save and render recents asynchronously
+            saveRecent(fileName, arrayBuffer)
+              .then(renderRecents)
+              .catch(console.error);
+          } else {
+            // Loaded from recent (has name and data)
+            arrayBuffer = file.data;
+            fileName = file.name;
+          }
+
+          currentDocName = fileName;
+          document.title = `${fileName} - DOCX Viewer`;
+
+          // Reset Cache and cleanup URLs
+          clearObjectUrls();
+          fileCache = {};
+          zipFilesMap = {};
+
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          currentZip = zip;
+
+          // Build Map
+          Object.keys(zip.files).forEach((path) => {
+            if (!zip.files[path].dir) zipFilesMap[path] = zip.files[path];
+          });
+
+          // Build Tree
+          renderFileTree(Object.keys(zipFilesMap));
+
+          // Show sidebar and switch to tree view
+          els.mainSidebar.classList.remove("hidden");
+          els.header.classList.remove("hidden");
+        } catch (err) {
+          console.error(err);
+          // Use custom UI instead of alert()
+          showAnalysis(
+            "**Error Loading File:** This file could not be processed. Please ensure it is a valid `.docx` file.",
+          );
+        } finally {
+          els.loading.style.display = "none";
+        }
+      }
+
+      function renderFileTree(paths) {
+        els.fileTree.innerHTML = "";
+        const root = {};
+
+        // Build hierarchy
+        paths.forEach((path) => {
+          const parts = path.split("/");
+          let current = root;
+          parts.forEach((part, i) => {
+            if (!current[part])
+              current[part] = i === parts.length - 1 ? null : {};
+            current = current[part];
+          });
+        });
+
+        function createNode(obj, container, prefix = "") {
+          const ul = document.createElement("ul");
+          const keys = Object.keys(obj).sort((a, b) => {
+            const aIsFolder = obj[a] !== null;
+            const bIsFolder = obj[b] !== null;
+            if (aIsFolder && !bIsFolder) return -1;
+            if (!aIsFolder && bIsFolder) return 1;
+            return a.localeCompare(b);
+          });
+
+          keys.forEach((key) => {
+            const fullPath = prefix ? `${prefix}/${key}` : key;
+            const li = document.createElement("li");
+            const div = document.createElement("div");
+            div.className = "labelContainer";
+
+            const isFolder = obj[key] !== null;
+
+            let iconStr = isFolder ? "folder" : getIconForFile(fullPath);
+            if (isFolder) {
+              li.className = "folder";
+              div.innerHTML = `<span class="arrow">▶</span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
+              div.onclick = (e) => {
+                e.stopPropagation();
+                li.classList.toggle("open");
+              };
+              li.appendChild(div);
+              createNode(obj[key], li, fullPath);
+            } else {
+              li.className = `file file-${iconStr}`;
+              if (iconStr === "code") li.classList.add("file-xml");
+              if (iconStr === "image") li.classList.add("file-image");
+
+              div.innerHTML = `<span class="arrow"></span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
+              div.onclick = async (e) => {
+                e.stopPropagation();
+                document
+                  .querySelectorAll(".file-tree li.selected")
+                  .forEach((el) => el.classList.remove("selected"));
+                li.classList.add("selected");
+                await openFile(fullPath);
+              };
+              li.appendChild(div);
+            }
+            ul.appendChild(li);
+          });
+          container.appendChild(ul);
+        }
+
+        createNode(root, els.fileTree);
+      }
+
+      async function openFile(path) {
+        const activePane = splitManager.getActive();
+        if (!activePane) return;
+
+        if (fileCache[path]) {
+          activePane.openTab(
+            path,
+            path.split("/").pop(),
+            fileCache[path].content,
+            fileCache[path].type,
+          );
+          return;
+        }
+
+        const zipObj = zipFilesMap[path];
+        if (!zipObj) return;
+
+        els.loading.style.display = "flex";
+        try {
+          let content, type;
+          if (isImage(path)) {
+            const blob = await zipObj.async("blob");
+            content = URL.createObjectURL(blob);
+            blobUrls.push(content); // Add to cleanup list
+            type = "image";
+          } else {
+            const text = await zipObj.async("text");
+            content =
+              path.endsWith(".xml") || path.endsWith(".rels")
+                ? formatXML(text)
+                : text;
+            type =
+              path.endsWith(".xml") || path.endsWith(".rels") ? "xml" : "text";
+          }
+
+          fileCache[path] = { content, type };
+          activePane.openTab(path, path.split("/").pop(), content, type);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          els.loading.style.display = "none";
+        }
+      }
+
+      async function renderRecents() {
+        const files = await getRecents();
+        els.landingRecentList.innerHTML = "";
+
+        // Update Sidebar
+        if (files.length === 0) {
+          els.landingRecentContainer.style.display = "none";
+        } else {
+          els.landingRecentContainer.style.display = "block";
+        }
+
+        files.slice(0, 3).forEach((file) => {
+          // Sidebar Item
+          const div = document.createElement("div");
+          div.className = "recent-item";
+          div.innerHTML = `
                     <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                         <span class="material-icons text-blue-400 text-sm shrink-0">description</span>
                         <span class="truncate" title="${file.name}">${file.name}</span>
                     </div>
                     <button class="delete-recent material-icons text-[16px] shrink-0 ml-2 hover:text-red-400" title="Remove">close</button>
                 `;
-                div.querySelector('.delete-recent').onclick = async (e) => {
-                    e.stopPropagation();
-                    await deleteRecent(file.name);
-                    renderRecents();
-                };
-                div.onclick = () => loadFile(file);
-                els.recentList.appendChild(div);
+          div.querySelector(".delete-recent").onclick = async (e) => {
+            e.stopPropagation();
+            await deleteRecent(file.name);
+            renderRecents();
+          };
+          div.onclick = () => loadFile(file);
 
-                // Landing Page Card
-                const card = document.createElement('div');
-                card.className = 'landing-recent-card';
-                card.innerHTML = `
+          // Landing Page Card
+          const card = document.createElement("div");
+          card.className = "landing-recent-card";
+          card.innerHTML = `
                     <div class="w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-blue-400">
                         <span class="material-icons">description</span>
                     </div>
@@ -1263,90 +1554,69 @@
                     </div>
                     <span class="material-icons text-gray-600 text-sm">arrow_forward</span>
                 `;
-                card.onclick = () => loadFile(file);
-                els.landingRecentList.appendChild(card);
-            });
-        }
-
-        // --- SEARCH ---
-        els.search.addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const files = els.fileTree.querySelectorAll('li.file');
-            files.forEach(li => {
-                const name = li.querySelector('span:last-child').innerText.toLowerCase();
-                const match = name.includes(term);
-                li.style.display = match ? 'block' : 'none';
-                // Expand parents if matched
-                if (match) {
-                    let parent = li.parentElement.closest('.folder');
-                    while(parent) {
-                        parent.classList.add('open');
-                        parent = parent.parentElement.closest('.folder');
-                    }
-                }
-            });
+          card.onclick = () => loadFile(file);
+          els.landingRecentList.appendChild(card);
         });
+      }
 
-        // --- TAB SWITCHING (Sidebar) ---
-        function setSidebarTab(tabId) {
-            const isTree = tabId === 'tabTree';
-            const activeTab = isTree ? els.tabTree : els.tabRecent;
-            const inactiveTab = isTree ? els.tabRecent : els.tabTree;
-
-            activeTab.classList.add('bg-[var(--bg-dark)]', 'text-white', 'font-medium', 'border-[var(--accent)]');
-            activeTab.classList.remove('bg-[var(--bg-sidebar)]', 'text-gray-400', 'border-transparent');
-            
-            inactiveTab.classList.remove('bg-[var(--bg-dark)]', 'text-white', 'font-medium', 'border-[var(--accent)]');
-            inactiveTab.classList.add('bg-[var(--bg-sidebar)]', 'text-gray-400', 'border-transparent');
-
-            // Apply rounded corners only to the active side
-            if(isTree) {
-                activeTab.classList.add('rounded-tl-lg');
-                inactiveTab.classList.remove('rounded-tr-lg');
-            } else {
-                activeTab.classList.add('rounded-tr-lg');
-                inactiveTab.classList.remove('rounded-tl-lg');
+      // --- SEARCH ---
+      els.search.addEventListener("input", (e) => {
+        const term = e.target.value.toLowerCase();
+        const files = els.fileTree.querySelectorAll("li.file");
+        files.forEach((li) => {
+          const name = li
+            .querySelector("span:last-child")
+            .innerText.toLowerCase();
+          const match = name.includes(term);
+          li.style.display = match ? "block" : "none";
+          // Expand parents if matched
+          if (match) {
+            let parent = li.parentElement.closest(".folder");
+            while (parent) {
+              parent.classList.add("open");
+              parent = parent.parentElement.closest(".folder");
             }
-
-
-            els.fileTree.parentElement.style.display = isTree ? 'block' : 'none';
-            els.recentList.style.display = isTree ? 'none' : 'block';
-        }
-
-        els.tabTree.onclick = () => setSidebarTab('tabTree');
-        els.tabRecent.onclick = () => setSidebarTab('tabRecent');
-
-
-        // --- DRAG AND DROP ---
-        window.addEventListener('dragover', (e) => { e.preventDefault(); els.dragOverlay.style.display = 'flex'; });
-        window.addEventListener('dragleave', (e) => { if (e.target === els.dragOverlay) els.dragOverlay.style.display = 'none'; });
-        window.addEventListener('drop', (e) => {
-            e.preventDefault();
-            els.dragOverlay.style.display = 'none';
-            if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+          }
         });
+      });
 
-        // --- INIT ---
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'file'; hiddenInput.accept = '.docx';
-        hiddenInput.onchange = (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); };
-        els.uploadBtn.onclick = () => hiddenInput.click();
-        els.landingUploadBtn.onclick = () => hiddenInput.click(); // Connect landing button
+      // --- DRAG AND DROP ---
+      window.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        els.dragOverlay.style.display = "flex";
+      });
+      window.addEventListener("dragleave", (e) => {
+        if (e.target === els.dragOverlay)
+          els.dragOverlay.style.display = "none";
+      });
+      window.addEventListener("drop", (e) => {
+        e.preventDefault();
+        els.dragOverlay.style.display = "none";
+        if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+      });
 
-        (async function bootstrap() {
-            splitManager.init(els.editorWrapper);
-            setSidebarTab('tabTree'); // Initialize sidebar tab look
-            await loadMonaco();
-            
-            splitManager.panes.forEach(p => {
-                if (!p.editor && p.editorContainer.style.display !== 'none') {
-                     p.initEditor();
-                     if(p.activeTabPath) p.setActiveTab(p.activeTabPath);
-                }
-            });
-            await renderRecents();
-        })();
+      // --- INIT ---
+      const hiddenInput = document.createElement("input");
+      hiddenInput.type = "file";
+      hiddenInput.accept = ".docx";
+      hiddenInput.onchange = (e) => {
+        if (e.target.files[0]) loadFile(e.target.files[0]);
+      };
+      els.uploadBtn.onclick = () => hiddenInput.click();
+      els.landingUploadBtn.onclick = () => hiddenInput.click(); // Connect landing button
 
+      (async function bootstrap() {
+        splitManager.init(els.editorWrapper);
+        await loadMonaco();
+
+        splitManager.panes.forEach((p) => {
+          if (!p.editor && p.editorContainer.style.display !== "none") {
+            p.initEditor();
+            if (p.activeTabPath) p.setActiveTab(p.activeTabPath);
+          }
+        });
+        await renderRecents();
+      })();
     </script>
-</body>
+  </body>
 </html>
