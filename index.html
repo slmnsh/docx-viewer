@@ -2310,18 +2310,25 @@
         navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
         
         const messageHandler = (event) => {
-          const { type, content, pages, size, current, total, message } = event.data;
+          const { type, content, pages, size, current, total, percent, message } = event.data;
           
-          if (type === "progress") {
-            if (current % 500 === 0) {
-              const pct = Math.round((current / total) * 100);
-              if (statusText) statusText.textContent = `Extracting ${pct}%...`;
-              console.log(`  Page ${current}/${total} (${pct}%)`);
-            }
+          if (type === "download_start") {
+            if (statusText) statusText.textContent = "Downloading PDF...";
+            console.log("Downloading ECMA-376 PDF...");
+          } else if (type === "download_progress") {
+            if (statusText) statusText.textContent = `Downloading ${percent}%...`;
+          } else if (type === "download_complete") {
+            if (statusText) statusText.textContent = `Downloaded ${(size/1024/1024).toFixed(1)}MB`;
+            console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
+          } else if (type === "extraction_start") {
+            if (statusText) statusText.textContent = "Extracting...";
+          } else if (type === "extraction_progress") {
+            if (statusText) statusText.textContent = `Extracting ${percent}% (${current}/${total} pages)`;
+            console.log(`  Extraction: ${current}/${total} (${percent}%)`);
           } else if (type === "complete") {
             ecmaStandardContent = content;
             localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-            console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB extracted`);
+            console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB ready`);
             if (indicator && statusText) {
               statusText.textContent = "✓ ECMA-376 Ready";
               const spinner = indicator.querySelector(".ecma-spinner");
@@ -2331,7 +2338,7 @@
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           } else if (type === "error") {
             console.error("ECMA extraction failed:", message);
-            if (statusText) statusText.textContent = "ECMA load failed";
+            if (statusText) statusText.textContent = "Load failed";
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };

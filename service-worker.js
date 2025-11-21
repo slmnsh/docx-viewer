@@ -49,10 +49,38 @@ async function extractAndStorePDF() {
 
     await initDB();
     
-    const response = await fetch(PDF_URL);
-    const buffer = await response.arrayBuffer();
-    const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
+    // Fetch with download progress tracking
+    self.postMessage({ type: "download_start", message: "Downloading PDF..." });
     
+    const response = await fetch(PDF_URL);
+    if (!response.ok) throw new Error("PDF fetch failed");
+    
+    const reader = response.body.getReader();
+    const contentLength = +response.headers.get('content-length');
+    let receivedLength = 0;
+    let chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      receivedLength += value.length;
+      
+      const pct = Math.round((receivedLength / contentLength) * 100);
+      self.postMessage({ type: "download_progress", current: receivedLength, total: contentLength, percent: pct });
+    }
+
+    const buffer = new Uint8Array(receivedLength);
+    let position = 0;
+    for (let chunk of chunks) {
+      buffer.set(chunk, position);
+      position += chunk.length;
+    }
+
+    self.postMessage({ type: "download_complete", size: receivedLength });
+    self.postMessage({ type: "extraction_start", message: "Extracting PDF..." });
+    
+    const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
     const totalPages = pdf.numPages;
     let extractedCount = 0;
 
@@ -64,8 +92,9 @@ async function extractAndStorePDF() {
         await savePageToDB(i, text);
         extractedCount++;
 
-        if (i % 100 === 0) {
-          self.postMessage({ type: "progress", current: i, total: totalPages });
+        if (i % 500 === 0) {
+          const pct = Math.round((i / totalPages) * 100);
+          self.postMessage({ type: "extraction_progress", current: i, total: totalPages, percent: pct });
         }
       } catch (e) {
         console.error(`SW: Page ${i} failed:`, e);
