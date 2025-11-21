@@ -894,6 +894,37 @@
       // --- MONACO HELPERS ---
       function registerGlobalMonacoFeatures() {
         if (!window.monaco || window.monacoXmlFoldingRegistered) return;
+        
+        // Register custom theme matching UI colors
+        monaco.editor.defineTheme("docx-internals", {
+          base: "vs-dark",
+          inherit: true,
+          rules: [
+            { token: "keyword", foreground: "00aaff", fontStyle: "bold" },
+            { token: "tag", foreground: "ff6e6e" },
+            { token: "attribute.name", foreground: "00aaff" },
+            { token: "attribute.value", foreground: "a9ff00" },
+            { token: "string", foreground: "a9ff00" },
+            { token: "comment", foreground: "7a7a8a", fontStyle: "italic" },
+            { token: "delimiter", foreground: "b0b0c0" },
+          ],
+          colors: {
+            "editor.background": "#181825",
+            "editor.foreground": "#e0e0e0",
+            "editor.lineNumbersContainer.background": "#1a1a28",
+            "editor.lineNumber": "#7a7a8a",
+            "editor.lineHighlightBackground": "#2a2a3a",
+            "editor.lineHighlightBorder": "transparent",
+            "editor.selectionBackground": "#3a5a7f",
+            "editor.selectionForeground": "#ffffff",
+            "editor.inactiveSelectionBackground": "#2a4a5f",
+            "editorCursor.foreground": "#00aaff",
+            "editorWhitespace.foreground": "#3a3a4a",
+            "editorBracketMatch.background": "#3a5a7f",
+            "editorBracketMatch.border": "#00aaff",
+          },
+        });
+        
         monaco.languages.registerFoldingRangeProvider("xml", {
           provideFoldingRanges: function (model) {
             const ranges = [];
@@ -1196,12 +1227,14 @@
           this.editor = monaco.editor.create(this.editorContainer, {
             value: "",
             language: "xml",
-            theme: "vs-dark",
+            theme: "docx-internals",
             automaticLayout: true,
             readOnly: true,
             minimap: { enabled: false },
-            fontFamily: 'Consolas, "Courier New", monospace', // Use a standard monospace font
-            fontSize: 14, // Readable font size
+            fontFamily: '"Fira Code", "SF Mono", Monaco, "Menlo", "Ubuntu Mono", monospace',
+            fontSize: 14,
+            fontLigatures: true,
+            lineHeight: 1.6,
           });
           this.editor.onDidFocusEditorText(() =>
             splitManager.setActive(this.id),
