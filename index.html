@@ -1,106 +1,2462 @@
-const DB_NAME = "DocxViewerECMA";
-const STORE_NAME = "pages";
-const PDF_URL = "/ecma-standard.pdf";
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%2300aaff'>D</text></svg>"
+    />
+    <title>DOCX Internals Viewer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Material Icons -->
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Showdown (Markdown) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <!-- Transformers.js for local AI -->
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
+    <!-- PDF.js for ECMA-376 Standard extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script>
+      if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      }
+    </script>
 
-let db = null;
+    <style>
+      /* --- NEW POLISHED THEME --- */
+      :root {
+        --bg-dark: #181825; /* Deep, rich dark background */
+        --bg-sidebar: #222138; /* Sidebar/Secondary background */
+        --bg-header: #2e2d4d; /* Pane/Main header background */
+        --border: #4a4a6b; /* Soft, slightly purple border */
+        --text-main: #e0e0e0; /* High-contrast main text */
+        --accent: #6b7dff; /* Muted purple-blue accent matching theme */
+        --hover: #353456; /* Subtle hover state */
+        --selected: #4b4a69; /* Clearer selected state */
+        --scrollbar-color-thumb: var(--color-gray-200);
+        --scrollbar-color-track: transparent;
+        --scrollbar-width: thin;
+        --scrollbar-width-legacy: 10px;
+      }
 
-function initDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      db = req.result;
-      resolve(db);
-    };
-    req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(STORE_NAME, { keyPath: "pageNum" });
-    };
-  });
-}
+      body {
+        background-color: var(--bg-dark);
+        color: var(--text-main);
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        overflow: hidden;
+        height: 100vh;
+        margin: 0;
+      }
 
-function savePageToDB(pageNum, text) {
-  return new Promise((resolve) => {
-    if (!db) return resolve();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ pageNum, text });
-    tx.oncomplete = () => resolve();
-  });
-}
+      /* Scrollbar styling */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-sidebar);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #5a5a75;
+        border-radius: 5px;
+      } /* Updated thumb color */
+      ::-webkit-scrollbar-thumb:hover {
+        background: #70708f;
+      }
 
-function getAllPagesFromDB() {
-  return new Promise((resolve) => {
-    if (!db) return resolve("");
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const req = tx.objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => {
-      const pages = req.result.sort((a, b) => a.pageNum - b.pageNum);
-      resolve(pages.map(p => p.text).join("\n"));
-    };
-    req.onerror = () => resolve("");
-  });
-}
+      /* Modern browsers with `scrollbar-*` support */
+      @supports (scrollbar-width: auto) {
+        * {
+          scrollbar-color: var(--scrollbar-color-thumb)
+            var(--scrollbar-color-track);
+          scrollbar-width: var(--scrollbar-width);
+        }
+      }
 
-async function extractAndStorePDF() {
-  try {
-    self.postMessage({ type: "download_start", message: "Downloading PDF..." });
-    
-    // Load PDF.js from CDN
-    importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
-    self.pdfjsLib.GlobalWorkerOptions.workerSrc = 
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+      /* Legacy browsers with `::-webkit-scrollbar-*` support */
+      @supports selector(::-webkit-scrollbar) {
+        ::-webkit-scrollbar-thumb {
+          background: var(--scrollbar-color-thumb);
+        }
+        ::-webkit-scrollbar-track {
+          background: var(--scrollbar-color-track);
+        }
+        ::-webkit-scrollbar {
+          max-width: var(--scrollbar-width-legacy);
+          max-height: var(--scrollbar-width-legacy);
+        }
+      }
 
-    await initDB();
-    
-    // Simple fetch without stream reader (more compatible)
-    const response = await fetch(PDF_URL);
-    if (!response.ok) throw new Error("PDF fetch failed: " + response.status);
-    
-    const buffer = await response.arrayBuffer();
-    const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
-    
-    self.postMessage({ type: "download_complete", size: buffer.byteLength, message: `Downloaded ${sizeMB}MB` });
-    self.postMessage({ type: "extraction_start", message: "Extracting..." });
-    
-    const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
-    const totalPages = pdf.numPages;
-    let extractedCount = 0;
+      /* File Tree */
+      .file-tree ul {
+        list-style: none;
+        padding-left: 12px;
+        margin: 0;
+      }
+      .file-tree li {
+        cursor: pointer;
+        line-height: 24px;
+        border-radius: 4px;
+      } /* Increased line-height */
+      .labelContainer {
+        display: flex;
+        align-items: center;
+        padding: 2px 5px;
+        border-radius: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background-color 0.15s;
+      }
+      .labelContainer:hover {
+        background-color: var(--hover);
+      }
+      .file-tree li.selected > .labelContainer {
+        background-color: var(--accent);
+        color: white;
+        box-shadow: 0 1px 4px rgba(0, 170, 255, 0.3); /* Subtle accent shadow */
+      }
 
-    for (let i = 1; i <= totalPages; i++) {
+      /* ECMA Loading Indicator */
+      #ecmaLoadingIndicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 12px;
+        background: rgba(107, 125, 255, 0.1);
+        border: 1px solid rgba(107, 125, 255, 0.3);
+        border-radius: 6px;
+        font-size: 12px;
+        color: #6b7dff;
+        margin-right: 12px;
+        animation: fadeIn 0.3s ease;
+      }
+      #ecmaLoadingIndicator.hidden {
+        display: none;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .ecma-spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(107, 125, 255, 0.3);
+        border-top-color: #6b7dff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .ecma-spinner.done {
+        animation: none;
+        border: none;
+        font-size: 14px;
+      }
+
+      /* Icons */
+      .tree-icon {
+        margin-right: 6px;
+        font-size: 16px;
+        color: #dcb67a;
+      } /* Default folder color */
+      .file-xml .tree-icon {
+        color: #ff6e6e;
+      } /* Redish for xml */
+      .file-image .tree-icon {
+        color: #c074f7;
+      } /* Purple for images */
+      .file-font .tree-icon {
+        color: #61d5f7;
+      } /* Cyan for fonts */
+      .file-tree li.selected .tree-icon {
+        color: white !important;
+      } /* White icons when selected */
+
+      .folder > ul {
+        display: none;
+      }
+      .folder.open > ul {
+        display: block;
+      }
+      .arrow {
+        display: inline-block;
+        width: 16px;
+        text-align: center;
+        margin-right: 2px;
+        transition: transform 0.1s;
+        font-size: 10px;
+        color: #999;
+      }
+      .folder.open > .labelContainer .arrow {
+        transform: rotate(90deg);
+      }
+
+      /* Split Panes (Main Content Area) */
+      .splitContainer {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+      .splitContainer.horizontal {
+        flex-direction: row;
+      }
+      .splitContainer.vertical {
+        flex-direction: column;
+      }
+
+      .splitPane {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        background: var(--bg-dark);
+        border: 1px solid var(--border);
+        border-radius: 8px; /* Rounded corners for main pane */
+        overflow: hidden; /* Important for containing editor */
+        min-width: 0;
+        min-height: 0;
+        position: relative;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4); /* Depth */
+      }
+      .splitPane.active {
+        border-color: var(--accent);
+      }
+
+      .paneHeader {
+        height: 38px; /* Slightly taller header */
+        background: var(--bg-header);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+      }
+
+      /* Tabs */
+      .paneTabsContainer {
+        display: flex;
+        overflow-x: scroll;
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+      }
+      .tab {
+        padding: 0 14px; /* More padding */
+        background: var(--bg-header);
+        margin-right: 1px;
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        max-width: 180px; /* Wider tabs */
+        flex-shrink: 0;
+        height: 100%;
+        border-bottom: 3px solid transparent; /* Space for accent line */
+        transition: background 0.2s;
+      }
+      .tab:hover {
+        background: #3c3b63;
+      }
+      .tab.active {
+        background: var(--bg-dark);
+        color: white;
+        border-bottom-color: var(--accent); /* Accent underline */
+      }
+      .tab-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-right: 8px;
+        min-width: 0;
+      }
+      .tab-close {
+        font-size: 16px;
+        border-radius: 4px;
+        padding: 1px 3px;
+        transition: background 0.15s;
+        color: #ccc;
+      }
+      .tab-close:hover {
+        background: #55547a;
+        color: white;
+      }
+
+      .paneActions {
+        display: flex;
+        gap: 8px;
+        padding: 0 10px;
+        border-left: 1px solid var(--border);
+      }
+      .paneActionBtn {
+        background: transparent;
+        border: none;
+        color: #ccc;
+        cursor: pointer;
+        font-size: 18px;
+        padding: 4px;
+        border-radius: 4px;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .paneActionBtn:hover {
+        background: #444;
+        color: var(--accent);
+      }
+
+      .paneEditorContainer {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      .paneImageContainer {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: var(--bg-dark);
+        overflow: auto;
+      }
+      .paneImageContainer img {
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 6px; /* Images also rounded */
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+      }
+
+      /* Resizers */
+      .splitResizer {
+        background: var(--bg-sidebar);
+        z-index: 10;
+        transition: background 0.2s;
+        opacity: 0.5; /* Subtle by default */
+      }
+      .splitResizer:hover,
+      .splitResizer.dragging {
+        background: var(--accent);
+        opacity: 1;
+      }
+      .horizontal > .splitResizer {
+        width: 6px;
+        cursor: col-resize;
+      } /* Wider resizer */
+      .vertical > .splitResizer {
+        height: 6px;
+        cursor: row-resize;
+      }
+
+      /* Loader/Overlay */
+      #loadingOverlay {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 49;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        flex-direction: row;
+        background: var(--bg-sidebar);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 16px;
+        gap: 10px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7);
+        min-width: auto;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: scale(1);
+        opacity: 1;
+      }
+      #loadingOverlay.hidden {
+        opacity: 0;
+        transform: scale(0.8);
+        pointer-events: none;
+      }
+      .spinner {
+        border: 3px solid #333;
+        border-top: 3px solid var(--accent);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+        flex-shrink: 0;
+      }
+      #loadingText {
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--text-main);
+        font-weight: 500;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* LLM Analysis Box */
+      #geminiAnalysisBox {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 30;
+        max-width: 450px;
+        background: var(--bg-sidebar);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: scale(0.9) translateX(20px);
+        opacity: 0;
+        display: flex;
+        flex-direction: column;
+        max-height: 80vh;
+        pointer-events: none;
+      }
+      #geminiAnalysisBox.visible {
+        transform: scale(1) translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #geminiAnalysisBox h3 {
+        background: linear-gradient(135deg, var(--accent) 0%, #5a6dd6 100%);
+        color: white;
+        padding: 16px 18px;
+        margin: 0;
+        border-top-left-radius: 11px;
+        border-top-right-radius: 11px;
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      #geminiAnalysisContent {
+        padding: 15px;
+        color: var(--text-main);
+        font-size: 14px;
+        overflow-y: auto;
+      }
+      #geminiAnalysisContent h1 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent);
+        margin: 12px 0 8px 0;
+      }
+      #geminiAnalysisContent h2 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        margin: 10px 0 6px 0;
+      }
+      #geminiAnalysisContent h3 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        margin: 8px 0 4px 0;
+        background: transparent;
+        padding: 0;
+        border: none;
+      }
+      #geminiAnalysisContent h4 {
+        font-weight: 700;
+        color: var(--accent);
+        border-bottom: 1px dashed var(--border);
+        padding-bottom: 5px;
+        margin-top: 15px;
+        margin-bottom: 10px;
+        font-size: 16px;
+      }
+      #geminiAnalysisContent p {
+        margin-bottom: 10px;
+        line-height: 1.5;
+      }
+      #geminiAnalysisContent strong {
+        color: white;
+        font-weight: 600;
+      }
+      #geminiAnalysisContent ul {
+        list-style: disc;
+        padding-left: 20px;
+        margin-bottom: 15px;
+      }
+      #geminiAnalysisContent li {
+        margin-bottom: 5px;
+      }
+      #geminiAnalysisContent code {
+        background: rgba(107, 125, 255, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "Fira Code", "SF Mono", Monaco, monospace;
+        font-size: 13px;
+        color: #9da3ff;
+        border: 1px solid rgba(107, 125, 255, 0.2);
+      }
+      #geminiAnalysisContent pre {
+        background: #0d0d14;
+        padding: 12px 14px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 12px 0;
+        font-size: 12px;
+        border: 1px solid #2a2a3a;
+        color: #b0b8c8;
+        line-height: 1.5;
+      }
+      #geminiAnalysisContent pre code {
+        background: transparent;
+        padding: 0;
+        border: none;
+        color: #9da3ff;
+      }
+
+      /* Recent Files Sidebar */
+      .recent-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 15px; /* More padding */
+        border-bottom: 1px solid #333;
+        cursor: pointer;
+        font-size: 14px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .recent-item:hover {
+        background: var(--hover);
+      }
+      .delete-recent {
+        color: #666;
+        padding: 4px;
+        border-radius: 4px;
+        transition:
+          color 0.15s,
+          background 0.15s;
+      }
+      .delete-recent:hover {
+        color: #ff6e6e;
+        background: #353456;
+      }
+
+      /* Landing Page Recent Card - Enhanced */
+      .landing-recent-card {
+        background: linear-gradient(
+          135deg,
+          rgba(34, 33, 56, 0.8) 0%,
+          rgba(46, 45, 77, 0.6) 100%
+        );
+        border: 1.5px solid rgba(0, 170, 255, 0.3);
+        padding: 16px 18px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        box-shadow:
+          0 4px 15px rgba(0, 0, 0, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+      }
+      .landing-recent-card::before {
+        content: "";
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100px;
+        height: 100px;
+        background: radial-gradient(
+          circle,
+          rgba(0, 170, 255, 0.1) 0%,
+          transparent 70%
+        );
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        pointer-events: none;
+      }
+      .landing-recent-card:hover {
+        background: linear-gradient(
+          135deg,
+          rgba(34, 33, 56, 1) 0%,
+          rgba(46, 45, 77, 0.9) 100%
+        );
+        border-color: rgba(0, 170, 255, 0.6);
+        transform: translateY(-4px);
+        box-shadow:
+          0 12px 30px rgba(0, 170, 255, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+      .landing-recent-card:hover::before {
+        width: 150px;
+        height: 150px;
+        right: -25%;
+        top: -25%;
+      }
+
+      /* ===== WELCOME PAGE STYLING - PROFESSIONAL ===== */
+
+      /* Welcome section container */
+      #welcomeSection {
+        background: linear-gradient(
+          135deg,
+          #181825 0%,
+          #1a1a2e 50%,
+          #181825 100%
+        );
+      }
+
+      /* Hero icon */
+      #welcomeSection > div > div:first-child {
+        transition: transform 0.2s ease;
+      }
+      #welcomeSection > div > div:first-child:hover {
+        transform: scale(1.05);
+      }
+
+      /* Title - clean gradient */
+      #welcomeSection > div h1 {
+        color: #e0e0e0;
+        font-size: 3rem;
+        font-weight: 900;
+        letter-spacing: -1.5px;
+      }
+
+      /* Description text */
+      #welcomeSection > div > p {
+        color: #b0b0c0;
+        font-size: 1.1rem;
+        line-height: 1.8;
+        max-width: 680px;
+      }
+
+      /* Start Exploring button */
+      #landingUploadBtn {
+        background: linear-gradient(135deg, #00aaff 0%, #007acc 100%);
+        border: none;
+        color: white;
+        padding: 14px 32px;
+        font-size: 1rem;
+        font-weight: 700;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        display: flex !important;
+        align-items: center;
+        gap: 10px;
+      }
+      #landingUploadBtn:hover {
+        background: linear-gradient(135deg, #00c7ff 0%, #0089d9 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+      }
+      #landingUploadBtn:active {
+        transform: translateY(0);
+      }
+
+      /* Recent documents section */
+      #landingRecentContainer > div:first-child {
+        border-bottom: 1px solid rgba(0, 170, 255, 0.2);
+        padding-bottom: 12px;
+      }
+      #landingRecentContainer > div:first-child h3 {
+        color: #e0e0e0;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        font-size: 0.85rem;
+      }
+      #landingRecentContainer > div:first-child span {
+        color: #7a7a8a;
+        font-size: 0.75rem;
+      }
+
+      /* Feature section separator */
+      #welcomeSection > div > div:last-child {
+        border-top: 1px solid rgba(0, 170, 255, 0.1);
+        padding-top: 32px;
+        margin-top: 24px;
+      }
+      #welcomeSection > div > div:last-child > div p {
+        color: #b0b0c0;
+        line-height: 1.6;
+      }
+
+      /* Feature cards */
+      #welcomeSection > div > div:last-child > div {
+        background: rgba(34, 33, 56, 0.6);
+        padding: 24px 20px !important;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 170, 255, 0.15) !important;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+      #welcomeSection > div > div:last-child > div:hover {
+        background: rgba(34, 33, 56, 0.8);
+        border-color: rgba(0, 170, 255, 0.25) !important;
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+      #welcomeSection > div > div:last-child > div h4 {
+        color: #e0e0e0;
+        font-weight: 700;
+        transition: color 0.2s ease;
+      }
+      #welcomeSection > div > div:last-child > div:hover h4 {
+        color: var(--accent);
+      }
+      #welcomeSection > div > div:last-child > div .material-icons {
+        transition: transform 0.2s ease;
+      }
+      #welcomeSection > div > div:last-child > div:hover .material-icons {
+        transform: scale(1.08);
+      }
+
+      /* Recent card styling */
+      .landing-recent-card {
+        background: rgba(34, 33, 56, 0.6) !important;
+        border: 1px solid rgba(0, 170, 255, 0.15) !important;
+        padding: 14px 16px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+      }
+      .landing-recent-card:hover {
+        background: rgba(34, 33, 56, 0.8) !important;
+        border-color: rgba(0, 170, 255, 0.25) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+      }
+
+      /* Section polish */
+      #welcomeSection {
+        user-select: none;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+      #welcomeSection > div > p {
+        max-width: 100%;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Main Layout -->
+    <div class="flex h-full flex-col">
+      <!-- Header -->
+      <!-- Updated Header styling with new colors and shadow -->
+      <header
+        id="header"
+        class="h-14 bg-[var(--bg-header)] flex items-center justify-between px-6 shadow-xl z-10 border-b border-[var(--border)] hidden"
+      >
+        <div class="flex items-center gap-3">
+          <span class="material-icons text-[var(--accent)] text-2xl"
+            >description</span
+          >
+          <h1 class="font-bold text-lg text-[var(--text-main)]">
+            DOCX Internals Viewer
+          </h1>
+          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-6 px-3 py-1.5 bg-[rgba(107,125,255,0.15)] border border-[rgba(107,125,255,0.4)] rounded-lg text-xs font-medium text-[#6b7dff] whitespace-nowrap">
+            <span class="ecma-spinner inline-block w-2.5 h-2.5 border-2 border-[rgba(107,125,255,0.3)] border-t-[#6b7dff] rounded-full animate-spin flex-shrink-0"></span>
+            <span id="ecmaStatusText">Loading ECMA-376...</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <button
+            id="settingsBtn"
+            class="text-gray-400 hover:text-[var(--accent)] px-2 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+            title="API Settings"
+          >
+            <span class="material-icons text-[20px]">settings</span>
+          </button>
+          <button
+            id="uploadBtn"
+            class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
+          >
+            <span class="material-icons text-[18px]">upload_file</span> Open
+            .docx
+          </button>
+        </div>
+      </header>
+
+      <!-- Body -->
+      <div class="flex flex-1 overflow-hidden p-3 bg-[var(--bg-dark)]">
+        <!-- Sidebar -->
+        <div
+          id="mainSidebar"
+          class="w-72 bg-[var(--bg-sidebar)] flex flex-col border border-[var(--border)] rounded-lg shadow-xl mr-3 hidden"
+        >
+          <div class="p-3 border-b border-[var(--border)]">
+            <input
+              type="text"
+              id="fileSearch"
+              placeholder="Filter files..."
+              class="w-full bg-[#3c3c5e] text-white text-sm px-3 py-2 rounded-md border border-transparent focus:border-[var(--accent)] outline-none transition"
+            />
+          </div>
+
+          <div id="sidebarContent" class="flex-1 overflow-y-auto">
+            <div id="fileTree" class="file-tree p-3 text-sm">
+              <div class="text-gray-500 text-center mt-10 text-xs italic">
+                No file loaded
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Area (Split Manager Container) -->
+        <!-- The editor wrapper now centers content if nothing is loaded -->
+        <div
+          id="editorWrapper"
+          class="flex-1 bg-[var(--bg-dark)] relative flex overflow-hidden"
+        >
+          <!-- Landing Page / Welcome Section -->
+          <div id="welcomeSection" class="w-full bg-[var(--bg-dark)] z-20">
+            <div class="max-w-3xl w-full px-6 py-10 flex flex-col items-center">
+              <!-- Hero -->
+              <div
+                class="w-24 h-24 bg-gradient-to-br from-[var(--accent)] to-[#007acc] rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-900/50 mb-8 transform hover:rotate-2 transition-transform"
+              >
+                <span class="material-icons text-white text-6xl"
+                  >description</span
+                >
+              </div>
+              <h1 class="text-5xl font-black text-white mb-6 text-center">
+                DOCX Internals Viewer
+              </h1>
+              <p
+                class="text-[#d0d0e0] text-center mb-6 max-w-2xl text-lg leading-relaxed font-medium"
+              >
+                A forensic tool for exploring the
+                <strong>Open XML</strong> structure of Word documents. Inspect
+                XML, view assets, and analyze the file hierarchy entirely in
+                your browser.
+              </p>
+
+              <!-- Main Action -->
+              <button
+                id="landingUploadBtn"
+                class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-10 py-4 rounded-xl font-semibold text-xl flex items-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl mb-8"
+              >
+                <span class="material-icons text-2xl">upload_file</span>
+                Start Exploring
+              </button>
+
+              <!-- Recent Files Section on Landing -->
+              <div id="landingRecentContainer" class="w-full hidden">
+                <div
+                  class="flex items-center justify-between mb-5 border-b border-[var(--border)] pb-3"
+                >
+                  <h3
+                    class="text-gray-400 text-sm font-bold uppercase tracking-widest"
+                  >
+                    Recent Documents
+                  </h3>
+                  <span class="text-xs text-gray-600"
+                    >Stored locally in browser</span
+                  >
+                </div>
+                <div
+                  id="landingRecentList"
+                  class="grid grid-cols-1 md:grid-cols-3 gap-4"
+                >
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- Footer Features -->
+              <div
+                class="mt-4 grid grid-cols-3 gap-6 text-center w-full border-t border-[var(--border)] pt-6"
+              >
+                <div>
+                  <span
+                    class="material-icons text-[var(--accent)] mb-3 text-3xl"
+                    >lock</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    Privacy First
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    All file processing occurs entirely offline within your
+                    browser.
+                  </p>
+                </div>
+                <div>
+                  <span class="material-icons text-[#ff6e6e] mb-3 text-3xl"
+                    >psychology</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    AI-Powered Analysis
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    OpenAI, Gemini, Anthropic, or free local AI. Choose your
+                    analyzer.
+                  </p>
+                </div>
+                <div>
+                  <span class="material-icons text-[#7a81ff] mb-3 text-3xl"
+                    >bolt</span
+                  >
+                  <h4 class="text-base font-semibold text-gray-300">
+                    Intelligent XML
+                  </h4>
+                  <p class="text-sm text-gray-500 mt-1">
+                    Auto-formatted XML with Monaco syntax highlighting and
+                    real-time code folding.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+      <div class="spinner"></div>
+      <div id="loadingText">Analyzing XML...</div>
+    </div>
+
+    <!-- LLM Analysis Box -->
+    <div id="geminiAnalysisBox" class="hidden">
+      <h3
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+        "
+      >
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1">
+          <span class="material-icons" style="color: white; font-size: 32px"
+            >description</span
+          >
+          <div style="display: flex; flex-direction: column">
+            <span style="font-size: 12px; color: #ccc; font-weight: normal"
+              >XML Analysis</span
+            >
+            <span
+              id="analysisModelName"
+              style="color: white; font-weight: bold; font-size: 14px"
+              >Local XML Parser</span
+            >
+          </div>
+        </div>
+        <button
+          id="closeAnalysisBtn"
+          class="material-icons"
+          style="
+            color: white;
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+          "
+        >
+          close
+        </button>
+      </h3>
+      <div id="geminiAnalysisContent" class="flex-1">
+        <!-- Analysis result injected here -->
+      </div>
+    </div>
+
+    <!-- Fullscreen Drag Overlay -->
+    <div
+      id="dragOverlay"
+      class="fixed inset-0 bg-black bg-opacity-80 z-40 hidden flex justify-center items-center text-white text-2xl border-4 border-[var(--accent)] border-dashed m-6 rounded-2xl"
+    >
+      <span class="material-icons text-5xl mr-4 text-[var(--accent)]"
+        >file_upload</span
+      >
+      Drop File to Open
+    </div>
+
+    <!-- API Settings Modal -->
+    <div
+      id="settingsModal"
+      class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-[var(--bg-sidebar)] rounded-lg border border-[var(--border)] max-w-lg w-full max-h-96 overflow-y-auto shadow-2xl"
+      >
+        <div
+          class="p-6 border-b border-[var(--border)] flex items-center justify-between sticky top-0 bg-[var(--bg-sidebar)]"
+        >
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <span class="material-icons">psychology_alt</span> AI Provider
+            Settings
+          </h2>
+          <button
+            id="closeSettings"
+            class="text-gray-400 hover:text-white text-2xl"
+          >
+            ×
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <p class="text-gray-400 text-sm">
+            Optionally add your LLM API keys for enhanced XML analysis. Keys
+            stay in your browser.
+          </p>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-300"
+              >OpenAI API Key</label
+            >
+            <input
+              id="openaiKey"
+              type="password"
+              placeholder="sk-..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              Get free credits:
+              <a
+                href="https://platform.openai.com/account/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >openai.com/account/api-keys</a
+              >
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-300"
+              >Google Gemini API Key</label
+            >
+            <input
+              id="geminiKey"
+              type="password"
+              placeholder="AIza..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              Free tier:
+              <a
+                href="https://aistudio.google.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >https://aistudio.google.com/api-keys</a
+              >
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-300"
+              >Anthropic Claude API Key</label
+            >
+            <input
+              id="anthropicKey"
+              type="password"
+              placeholder="sk-ant-..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              <a
+                href="https://www.anthropic.com/api"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >anthropic.com/api</a
+              >
+            </p>
+          </div>
+
+          <div class="flex gap-2 pt-4">
+            <button
+              id="saveLlmKeys"
+              class="flex-1 bg-[var(--accent)] hover:bg-[#5a6dd6] text-white px-4 py-2 rounded font-medium transition"
+            >
+              Save Keys
+            </button>
+            <button
+              id="clearLlmKeys"
+              class="flex-1 bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded font-medium transition"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- GLOBAL STATE ---
+      const els = {
+        mainSidebar: document.getElementById("mainSidebar"),
+        header: document.getElementById("header"),
+        fileTree: document.getElementById("fileTree"),
+        landingRecentList: document.getElementById("landingRecentList"),
+        landingRecentContainer: document.getElementById(
+          "landingRecentContainer",
+        ),
+        editorWrapper: document.getElementById("editorWrapper"),
+        loading: document.getElementById("loadingOverlay"),
+        loadingText: document.getElementById("loadingText"),
+        uploadBtn: document.getElementById("uploadBtn"),
+        landingUploadBtn: document.getElementById("landingUploadBtn"),
+        search: document.getElementById("fileSearch"),
+        welcome: document.getElementById("welcomeSection"),
+        dragOverlay: document.getElementById("dragOverlay"),
+        sidebarContent: document.getElementById("sidebarContent"),
+        geminiAnalysisBox: document.getElementById("geminiAnalysisBox"),
+        geminiAnalysisContent: document.getElementById("geminiAnalysisContent"),
+        closeAnalysisBtn: document.getElementById("closeAnalysisBtn"),
+      };
+
+      let currentZip = null;
+      let zipFilesMap = {}; // Map of path -> JSZip object
+      let fileCache = {}; // In-memory cache of text/blobs
+      let currentDocName = "";
+      let blobUrls = []; // Array to track image Blob URLs for cleanup
+      let ecmaWorker = null;
+      let ecmaStandardContent = "";
+
+      // Function to safely escape HTML special characters
+      const escapeHtml = (str) => {
+        if (typeof str !== "string") return str;
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      };
+
+      // --- MONACO LOADER ---
+      function loadMonaco() {
+        return new Promise((resolve, reject) => {
+          if (window.monaco) return resolve();
+          const script = document.createElement("script");
+          script.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js";
+          script.onload = () => {
+            require.config({
+              paths: {
+                vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs",
+              },
+            });
+            require(["vs/editor/editor.main"], () => {
+              registerGlobalMonacoFeatures();
+              resolve();
+            });
+          };
+          script.onerror = reject;
+          document.body.appendChild(script);
+        });
+      }
+
+      // --- MONACO HELPERS ---
+      function registerGlobalMonacoFeatures() {
+        if (!window.monaco || window.monacoXmlFoldingRegistered) return;
+
+        // Register custom theme matching UI colors
+        monaco.editor.defineTheme("docx-internals", {
+          base: "vs-dark",
+          inherit: true,
+          rules: [
+            { token: "keyword", foreground: "7fa0d0" },
+            { token: "tag", foreground: "b0a080" },
+            { token: "attribute.name", foreground: "9ac0e8" },
+            { token: "attribute.value", foreground: "a8d89f" },
+            { token: "string", foreground: "a8d89f" },
+            { token: "comment", foreground: "6a7a8a", fontStyle: "italic" },
+            { token: "delimiter", foreground: "#a0a0b0" },
+          ],
+          colors: {
+            "editor.background": "#181825",
+            "editor.foreground": "#d8d8e8",
+            "editor.lineNumbersContainer.background": "#181825",
+            "editor.lineNumber": "#5a5a7a",
+            "editor.lineHighlightBackground": "#1e1e2e",
+            "editor.lineHighlightBorder": "transparent",
+            "editor.selectionBackground": "#2a4a6f",
+            "editor.selectionForeground": "#ffffff",
+            "editor.inactiveSelectionBackground": "#1e2a3a",
+            "editorCursor.foreground": "#7fa0d0",
+            "editorWhitespace.foreground": "#2a2a3a",
+            "editorBracketMatch.background": "#2a3a5f",
+            "editorBracketMatch.border": "#7fa0d0",
+          },
+        });
+
+        monaco.languages.registerFoldingRangeProvider("xml", {
+          provideFoldingRanges: function (model) {
+            const ranges = [];
+            const stack = [];
+            for (let i = 1; i <= model.getLineCount(); i++) {
+              const line = model.getLineContent(i).trim();
+              const open = line.match(/^<([a-zA-Z0-9:_-]+)(\s|>|$)/);
+              const close = line.match(/^<\/([a-zA-Z0-9:_-]+)>/);
+              if (open && !line.endsWith("/>"))
+                stack.push({ tag: open[1], start: i });
+              else if (close && stack.length > 0) {
+                const last = stack.pop();
+                if (last.tag === close[1] && i > last.start) {
+                  ranges.push({
+                    start: last.start,
+                    end: i,
+                    kind: monaco.languages.FoldingRangeKind.Region,
+                  });
+                }
+              }
+            }
+            return ranges;
+          },
+        });
+        window.monacoXmlFoldingRegistered = true;
+      }
+
+      // --- LLM API SETTINGS ---
+      let llmSettings = {
+        openai: localStorage.getItem("llm_openai_key") || "",
+        gemini: localStorage.getItem("llm_gemini_key") || "",
+        anthropic: localStorage.getItem("llm_anthropic_key") || "",
+      };
+
+      // --- TRANSFORMERS.JS LOCAL AI INTEGRATION ---
+      let pipelineAnalyzer = null;
+
+      async function initializeAI() {
+        try {
+          // Transformers.js is optional - app works with or without it
+          if (typeof window.TransformersAPI !== "undefined") {
+            console.log("Transformers.js AI available");
+          } else {
+            console.log("Transformers.js not available, using local analysis");
+          }
+        } catch (error) {
+          console.warn(
+            "AI initialization notice:",
+            error?.message || "Transformers not available",
+          );
+        }
+      }
+
+      async function analyzeWithOpenAI(xmlSnippet) {
+        const apiKey = llmSettings.openai;
+        if (!apiKey) return null;
+        try {
+          const systemPrompt = `You are an ECMA-376 XML specification expert. Analyze the DOCX Open XML. For each element and attribute found, document: 1) Element name and what it does (per ECMA-376), 2) Attributes on that element, what each attribute does, and their possible values/ranges. Use clean markdown with sections and lists. Be technical and concise. IMPORTANT: Do NOT wrap content in code fences. Output plain markdown only.`;
+          const ecmaContext = ecmaStandardContent ? `\n\nECMA-376 Standard Reference (for context):\n${ecmaStandardContent.substring(0, 3000)}` : "";
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: systemPrompt + ecmaContext },
+                  {
+                    role: "user",
+                    content: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\``,
+                  },
+                ],
+                max_tokens: 1500,
+              }),
+            },
+          );
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          return content ? { content, model: "OpenAI GPT-4o Mini" } : null;
+        } catch (e) {
+          console.error("OpenAI error:", e);
+          return null;
+        }
+      }
+
+      async function analyzeWithGemini(xmlSnippet) {
+        const apiKey = llmSettings.gemini;
+        if (!apiKey) return null;
+        try {
+          const systemPrompt = `You are an ECMA-376 XML specification expert. Analyze the DOCX Open XML. For each element and attribute found, document: 1) Element name and what it does (per ECMA-376), 2) Attributes on that element, what each attribute does, and their possible values/ranges. Use clean markdown with sections and lists. Be technical and concise. IMPORTANT: Do NOT wrap content in code fences. Output plain markdown only.`;
+          const ecmaContext = ecmaStandardContent ? `\n\nECMA-376 Standard Reference (for context):\n${ecmaStandardContent.substring(0, 3000)}` : "";
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt + ecmaContext }] },
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\``,
+                      },
+                    ],
+                  },
+                ],
+              }),
+            },
+          );
+          const data = await response.json();
+          const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          return content ? { content, model: "Google Gemini 2.0 Flash" } : null;
+        } catch (e) {
+          console.error("Gemini error:", e);
+          return null;
+        }
+      }
+
+      function findEcmaDefinition(term) {
+        if (!ecmaStandardContent || ecmaStandardContent.length === 0) return null;
+        try {
+          const searchTerm = term.toLowerCase();
+          const idx = ecmaStandardContent.toLowerCase().indexOf(searchTerm);
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 100);
+            const end = Math.min(ecmaStandardContent.length, idx + 300);
+            return ecmaStandardContent.substring(start, end);
+          }
+        } catch (e) {
+          // Silent fail
+        }
+        return null;
+      }
+
+      async function analyzeWithXMLTransformers(xmlSnippet) {
+        // Parse XML to extract elements, attributes, and their values
+        const elementMap = {}; // tagName -> {count, attributes: {attrName -> [values]}}
+
+        // Extract tags and their attributes
+        const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
+        let match;
+        while ((match = tagRegex.exec(xmlSnippet)) !== null) {
+          const tagName = match[1];
+          const tagAttrs = match[2];
+
+          if (!elementMap[tagName]) {
+            elementMap[tagName] = { count: 0, attributes: {} };
+          }
+          elementMap[tagName].count++;
+
+          // Extract attributes and their values from this tag
+          const attrRegex = /([a-zA-Z:_-]+)="([^"]*)"/g;
+          let attrMatch;
+          while ((attrMatch = attrRegex.exec(tagAttrs)) !== null) {
+            const attrName = attrMatch[1];
+            const attrValue = attrMatch[2];
+
+            if (!elementMap[tagName].attributes[attrName]) {
+              elementMap[tagName].attributes[attrName] = [];
+            }
+            if (!elementMap[tagName].attributes[attrName].includes(attrValue)) {
+              elementMap[tagName].attributes[attrName].push(attrValue);
+            }
+          }
+        }
+
+        // Generate detailed API reference style analysis with ECMA context
+        let analysis = `**Elements Found:** ${Object.keys(elementMap).length}\n\n`;
+        const hasEcma = ecmaStandardContent && ecmaStandardContent.length > 1000;
+        if (hasEcma) {
+          analysis += `✓ **Enhanced with ECMA-376 Standard context** (${(ecmaStandardContent.length/1024/1024).toFixed(1)}MB)\n\n`;
+        }
+
+        analysis += `## Elements and Attributes\n\n`;
+        Object.entries(elementMap).forEach(([tagName, data]) => {
+          analysis += `### ${tagName}\n`;
+          analysis += `- **Occurrences:** ${data.count}x\n`;
+          
+          // Try to find ECMA definition
+          if (hasEcma) {
+            const ecmaDef = findEcmaDefinition(tagName);
+            if (ecmaDef) {
+              analysis += `- **ECMA-376 Reference:** "${ecmaDef.substring(0, 150)}..."\n`;
+            } else {
+              analysis += `- **Category:** ECMA-376 Part 1 element\n`;
+            }
+          } else {
+            analysis += `- **Type:** ECMA-376 element\n`;
+          }
+
+          if (Object.keys(data.attributes).length > 0) {
+            analysis += `- **Attributes:**\n`;
+            Object.entries(data.attributes).forEach(([attrName, values]) => {
+              if (hasEcma) {
+                const attrDef = findEcmaDefinition(attrName);
+                const desc = attrDef ? `"${attrDef.substring(0, 80)}..."` : "ECMA-376 attribute";
+                analysis += `  - **${attrName}**: ${desc}\n`;
+              } else {
+                analysis += `  - **${attrName}**: ECMA-376 attribute\n`;
+              }
+              if (values.length <= 5) {
+                analysis += `    - Values: ${values.map((v) => `\`${v}\``).join(", ")}\n`;
+              } else {
+                analysis += `    - Sample values: ${values.slice(0, 3).map((v) => `\`${v}\``).join(", ")} (+ ${values.length - 3} more)\n`;
+              }
+            });
+          }
+          analysis += `\n`;
+        });
+
+        analysis += `## Reference\n\n`;
+        analysis += `- **Standard:** ECMA-376 Office Open XML (5th Edition December 2016)\n`;
+        analysis += `- **Documentation:** https://www.ecma-international.org/publications-and-standards/standards/ecma-376/\n`;
+        if (hasEcma) {
+          analysis += `- **Status:** ✓ Full specification loaded and indexed\n`;
+        }
+
+        return { content: analysis, model: "Local XML Parser" };
+      }
+
+      async function analyzeXMLWithBestAvailable(xmlSnippet) {
+        // Try premium LLMs first if keys available
+        if (llmSettings.openai) {
+          const result = await analyzeWithOpenAI(xmlSnippet);
+          if (result) {
+            els.loadingText.textContent = `Analyzing with ${result.model}...`;
+            return result;
+          }
+        }
+        if (llmSettings.gemini) {
+          const result = await analyzeWithGemini(xmlSnippet);
+          if (result) {
+            els.loadingText.textContent = `Analyzing with ${result.model}...`;
+            return result;
+          }
+        }
+        // Fall back to local
+        els.loadingText.textContent = "Analyzing XML structure locally...";
+        return await analyzeWithXMLTransformers(xmlSnippet);
+      }
+
+      function showAnalysis(markdown) {
+        var converter = new showdown.Converter({
+          tables: true,
+          tasklists: true,
+          strikethrough: true,
+          ghCodeBlocks: true,
+        });
+        els.geminiAnalysisContent.innerHTML = converter.makeHtml(markdown);
+        els.geminiAnalysisBox.classList.remove("hidden");
+        void els.geminiAnalysisBox.offsetWidth;
+        els.geminiAnalysisBox.classList.add("visible");
+      }
+
+      function hideAnalysis() {
+        els.geminiAnalysisBox.classList.remove("visible");
+        setTimeout(() => {
+          els.geminiAnalysisBox.classList.add("hidden");
+          els.geminiAnalysisContent.innerHTML = "";
+        }, 300); // Wait for transition
+      }
+
+      els.closeAnalysisBtn.onclick = hideAnalysis;
+
+      // --- INDEXEDDB (Persistence) ---
+      const DB_NAME = "DocxViewerDB";
+      const DB_VERSION = 2;
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains("files"))
+              db.createObjectStore("files", { keyPath: "id" }); // id = docName + path
+            if (!db.objectStoreNames.contains("recents"))
+              db.createObjectStore("recents", { keyPath: "name" });
+          };
+          req.onsuccess = (e) => resolve(e.target.result);
+          req.onerror = (e) => {
+            console.error(
+              "[IndexedDB] Failed to open database:",
+              e.target.error,
+            );
+            reject(e.target.error);
+          };
+        });
+      }
+
+      async function saveRecent(name, arrayBuffer) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction("recents", "readwrite");
+          tx.objectStore("recents").put({
+            name,
+            data: arrayBuffer,
+            timestamp: Date.now(),
+          });
+
+          return new Promise((resolve) => {
+            tx.oncomplete = () => {
+              console.log(`[IndexedDB Success] Saved recent file: ${name}`);
+              resolve();
+            };
+            tx.onerror = (e) => {
+              console.error(
+                `[IndexedDB Error] Failed to save recent file: ${name}`,
+                e.target.error,
+              );
+              resolve();
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for saveRecent.",
+            e,
+          );
+        }
+      }
+
+      async function getRecents() {
+        try {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction("recents", "readonly");
+            const req = tx.objectStore("recents").getAll();
+            req.onsuccess = () =>
+              resolve(req.result.sort((a, b) => b.timestamp - a.timestamp));
+            req.onerror = (e) => {
+              console.error(
+                "[IndexedDB Error] Failed to get recent files.",
+                e.target.error,
+              );
+              resolve([]);
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for getRecents.",
+            e,
+          );
+          return [];
+        }
+      }
+
+      async function deleteRecent(name) {
+        try {
+          const db = await openDB();
+          const tx = db.transaction("recents", "readwrite");
+          tx.objectStore("recents").delete(name);
+
+          return new Promise((resolve) => {
+            tx.oncomplete = () => {
+              console.log(`[IndexedDB Success] Removed recent file: ${name}`);
+              resolve();
+            };
+            tx.onerror = (e) => {
+              console.error(
+                `[IndexedDB Error] Failed to delete recent file: ${name}`,
+                e.target.error,
+              );
+              resolve();
+            };
+          });
+        } catch (e) {
+          console.error(
+            "[IndexedDB Critical Error] Could not initialize DB for deleteRecent.",
+            e,
+          );
+        }
+      }
+
+      // --- UTILS ---
+      function formatXML(xml) {
+        let formatted = "";
+        let reg = /(>)(<)(\/*)/g;
+        xml = xml.replace(reg, "$1\r\n$2$3");
+        let pad = 0;
+        xml.split("\r\n").forEach((node) => {
+          let indent = 0;
+          if (node.match(/.+<\/\w[^>]*>$/)) indent = 0;
+          else if (node.match(/^<\/\w/)) {
+            if (pad !== 0) pad -= 1;
+          } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) indent = 1;
+          else indent = 0;
+          let padding = "";
+          for (let i = 0; i < pad; i++) padding += "  ";
+          formatted += padding + node + "\r\n";
+          pad += indent;
+        });
+        return formatted;
+      }
+
+      function isImage(path) {
+        return /\.(png|jpeg|jpg|gif|bmp|webp)$/i.test(path);
+      }
+
+      function getIconForFile(path) {
+        if (isImage(path)) return "image";
+        if (path.endsWith(".xml") || path.endsWith(".rels")) return "code";
+        return "description";
+      }
+
+      function clearObjectUrls() {
+        blobUrls.forEach((url) => URL.revokeObjectURL(url));
+        blobUrls = [];
+      }
+
+      // --- SPLIT MANAGER & PANE CLASSES ---
+      class SplitPane {
+        constructor(id, container) {
+          this.id = id;
+          this.container = container;
+          this.tabs = [];
+          this.activeTabPath = null;
+          this.editor = null;
+          this.element = null;
+          this.isXml = false; // Track file type
+        }
+
+        createUI() {
+          const pane = document.createElement("div");
+          pane.className = "splitPane";
+          pane.innerHTML = `
+                    <div class="paneHeader">
+                        <div class="paneTabsContainer"></div>
+                        <div class="paneActions">
+                            <button id="gemini-btn-${this.id}" class="paneActionBtn text-yellow-400 hover:text-yellow-200 hidden" title="Analyze Selection with Gemini">
+                                <span class="material-icons text-lg">psychology_alt</span>
+                            </button>
+                            <button class="paneActionBtn material-icons" title="Split Horizontally" onclick="splitManager.split(${this.id}, 'vertical')">splitscreen</button>
+                            <button class="paneActionBtn material-icons" title="Split Vertically" onclick="splitManager.split(${this.id}, 'horizontal')">view_week</button>
+                            <button class="paneActionBtn material-icons" title="Close Pane" onclick="splitManager.close(${this.id})">close</button>
+                        </div>
+                    </div>
+                    <div class="paneEditorContainer" style="display:none;"></div>
+                    <div class="paneImageContainer" style="display:none;"><img src=""></div>
+                    <div class="absolute inset-0 flex items-center justify-center text-gray-600 pointer-events-none" id="empty-${this.id}">
+                        <span class="material-icons text-7xl opacity-10">code</span>
+                    </div>
+                `;
+
+          this.element = pane;
+          this.tabsContainer = pane.querySelector(".paneTabsContainer");
+          this.editorContainer = pane.querySelector(".paneEditorContainer");
+          this.imageContainer = pane.querySelector(".paneImageContainer");
+          this.emptyState = pane.querySelector(`#empty-${this.id}`);
+          this.geminiBtn = pane.querySelector(`#gemini-btn-${this.id}`);
+
+          pane.addEventListener("mousedown", () =>
+            splitManager.setActive(this.id),
+          );
+          this.geminiBtn.addEventListener("click", () =>
+            this.analyzeSelection(),
+          );
+
+          return pane;
+        }
+
+        initEditor() {
+          if (this.editor || !window.monaco) return;
+          this.editor = monaco.editor.create(this.editorContainer, {
+            value: "",
+            language: "plaintext",
+            theme: "docx-internals",
+            automaticLayout: true,
+            readOnly: true,
+            minimap: { enabled: false },
+            fontFamily:
+              '"Fira Code", "SF Mono", Monaco, "Menlo", "Ubuntu Mono", monospace',
+            fontSize: 14,
+            fontLigatures: true,
+            lineHeight: 1.6,
+            glyphMargin: false,
+            folding: false,
+            renderLineHighlight: "none",
+            overviewRulerBorder: false,
+          });
+          this.editor.onDidFocusEditorText(() =>
+            splitManager.setActive(this.id),
+          );
+        }
+
+        async openTab(path, name, content, type) {
+          // Check existing
+          const existing = this.tabs.find((t) => t.path === path);
+          if (existing) {
+            this.setActiveTab(path);
+            return;
+          }
+
+          this.tabs.push({ path, name, content, type });
+          this.renderTabs();
+          this.setActiveTab(path);
+        }
+
+        setActiveTab(path) {
+          this.activeTabPath = path;
+          const tab = this.tabs.find((t) => t.path === path);
+          if (!tab) {
+            this.isXml = false;
+            this.geminiBtn.classList.add("hidden");
+            return;
+          }
+
+          this.isXml = tab.type === "xml";
+          this.geminiBtn.classList.toggle("hidden", !this.isXml);
+
+          this.renderTabs();
+          this.emptyState.style.display = "none";
+
+          if (tab.type === "image") {
+            this.editorContainer.style.display = "none";
+            this.imageContainer.style.display = "flex";
+            this.imageContainer.querySelector("img").src = tab.content; // Blob URL
+          } else {
+            this.imageContainer.style.display = "none";
+            this.editorContainer.style.display = "block";
+            if (!this.editor) this.initEditor();
+
+            if (!this.editor) {
+              this.editorContainer.innerHTML =
+                '<div class="flex items-center justify-center h-full text-gray-500 text-sm">Loading editor...</div>';
+              return;
+            }
+
+            const model = this.editor.getModel();
+            const lang = tab.type === "xml" ? "xml" : "plaintext";
+
+            if (model) {
+              monaco.editor.setModelLanguage(model, lang);
+              if (model.getValue() !== tab.content)
+                this.editor.setValue(tab.content);
+            } else {
+              const newModel = monaco.editor.createModel(tab.content, lang);
+              this.editor.setModel(newModel);
+            }
+            this.editor.setScrollTop(0);
+          }
+        }
+
+        async analyzeSelection() {
+          if (!this.editor || !this.isXml) return;
+
+          const selection = this.editor.getSelection();
+          const selectedText = this.editor
+            .getModel()
+            .getValueInRange(selection)
+            .trim();
+
+          if (!selectedText) {
+            showAnalysis(
+              "**Error:** Please select a block of XML code in the editor first.",
+            );
+            return;
+          }
+
+          els.loadingText.textContent = "Analyzing XML...";
+          els.loading.style.display = "flex";
+
+          try {
+            const result = await analyzeXMLWithBestAvailable(selectedText);
+            if (result && result.content) {
+              // Update model name in header
+              const modelNameEl = document.getElementById("analysisModelName");
+              if (modelNameEl) {
+                modelNameEl.textContent = result.model || "Local XML Parser";
+              }
+              showAnalysis(result.content);
+            } else {
+              showAnalysis("**Error:** Analysis returned no content.");
+            }
+          } catch (e) {
+            console.error("XML analysis failed:", e);
+            showAnalysis(
+              "**Error:** Failed to analyze XML. Check console for details.",
+            );
+          } finally {
+            els.loading.style.display = "none";
+            els.loadingText.textContent = "Processing...";
+          }
+        }
+
+        closeTab(path) {
+          const idx = this.tabs.findIndex((t) => t.path === path);
+          if (idx === -1) return;
+
+          const isActive = this.activeTabPath === path;
+          this.tabs.splice(idx, 1);
+
+          if (this.tabs.length === 0) {
+            this.activeTabPath = null;
+            this.editorContainer.style.display = "none";
+            this.imageContainer.style.display = "none";
+            this.emptyState.style.display = "flex";
+            this.isXml = false;
+            this.geminiBtn.classList.add("hidden");
+          } else if (isActive) {
+            this.setActiveTab(this.tabs[Math.max(0, idx - 1)].path);
+          }
+          this.renderTabs();
+        }
+
+        renderTabs() {
+          this.tabsContainer.innerHTML = "";
+          this.tabs.forEach((tab) => {
+            const el = document.createElement("div");
+            el.className = `tab ${tab.path === this.activeTabPath ? "active" : ""}`;
+            el.innerHTML = `
+                        <span class="material-icons text-[16px] mr-2 text-gray-400">
+                            ${getIconForFile(tab.path)}
+                        </span>
+                        <span class="tab-label">
+                            ${tab.name}
+                        </span>
+                        <span class="tab-close material-icons">close</span>
+                    `;
+            el.querySelector(".tab-close").onclick = (e) => {
+              e.stopPropagation();
+              this.closeTab(tab.path);
+            };
+            el.onclick = () => this.setActiveTab(tab.path);
+            this.tabsContainer.appendChild(el);
+          });
+        }
+      }
+
+      class SplitManager {
+        constructor() {
+          this.panes = new Map();
+          this.nextId = 1;
+          this.activeId = null;
+        }
+
+        init(container) {
+          this.container = container;
+          const pane = this.createPane();
+          this.container.appendChild(pane.element);
+          this.setActive(pane.id);
+        }
+
+        createPane() {
+          const pane = new SplitPane(this.nextId++, this.container);
+          pane.createUI();
+          this.panes.set(pane.id, pane);
+          if (window.monaco) pane.initEditor();
+          return pane;
+        }
+
+        setActive(id) {
+          this.panes.forEach((p) => p.element.classList.remove("active"));
+          const pane = this.panes.get(id);
+          if (pane) {
+            pane.element.classList.add("active");
+            this.activeId = id;
+          }
+        }
+
+        getActive() {
+          return (
+            this.panes.get(this.activeId) || this.panes.values().next().value
+          );
+        }
+
+        split(paneId, direction) {
+          const pane = this.panes.get(paneId);
+          if (!pane) return;
+
+          const newPane = this.createPane();
+          const wrapper = document.createElement("div");
+          wrapper.className = `splitContainer ${direction}`; // Flex container
+
+          const resizer = document.createElement("div");
+          resizer.className = "splitResizer";
+
+          const parent = pane.element.parentElement;
+          parent.replaceChild(wrapper, pane.element);
+
+          wrapper.appendChild(pane.element);
+          wrapper.appendChild(resizer);
+          wrapper.appendChild(newPane.element);
+
+          // Setup resize logic
+          this.setupResizer(resizer, wrapper, direction);
+          this.setActive(newPane.id);
+        }
+
+        close(paneId) {
+          if (this.panes.size <= 1) return; // Keep one open
+          const pane = this.panes.get(paneId);
+          if (!pane) return;
+
+          const parent = pane.element.parentElement;
+          if (parent.classList.contains("splitContainer")) {
+            // Structure: [PaneA, Resizer, PaneB]
+            let sibling;
+
+            // Determine which sibling remains
+            if (
+              pane.element.nextElementSibling &&
+              pane.element.nextElementSibling.nextElementSibling
+            ) {
+              // Pane is A, keep B (index 2)
+              sibling = pane.element.nextElementSibling.nextElementSibling;
+            } else if (
+              pane.element.previousElementSibling &&
+              pane.element.previousElementSibling.previousElementSibling
+            ) {
+              // Pane is B, keep A (index 0)
+              sibling =
+                pane.element.previousElementSibling.previousElementSibling;
+            } else {
+              // Should not happen if size > 1 but safe guard
+              return;
+            }
+
+            if (sibling) {
+              sibling.style.flex = parent.style.flex;
+              if (!parent.style.flex) sibling.style.flex = "";
+
+              const grandParent = parent.parentElement;
+              grandParent.replaceChild(sibling, parent);
+            }
+          }
+
+          // Dispose Monaco editor if exists
+          if (pane.editor) {
+            pane.editor.dispose();
+          }
+
+          this.panes.delete(paneId);
+
+          // Focus another pane
+          if (this.activeId === paneId) {
+            const next = this.panes.values().next().value;
+            if (next) this.setActive(next.id);
+          }
+        }
+
+        setupResizer(resizer, container, direction) {
+          let startPos, startSizeA, startSizeB;
+          const elA = container.children[0];
+          const elB = container.children[2]; // 1 is resizer
+
+          const onMouseDown = (e) => {
+            e.preventDefault();
+            resizer.classList.add("dragging");
+            startPos = direction === "horizontal" ? e.clientX : e.clientY;
+            startSizeA =
+              direction === "horizontal" ? elA.offsetWidth : elA.offsetHeight;
+            startSizeB =
+              direction === "horizontal" ? elB.offsetWidth : elB.offsetHeight;
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+          };
+
+          const onMouseMove = (e) => {
+            const currentPos =
+              direction === "horizontal" ? e.clientX : e.clientY;
+            const delta = currentPos - startPos;
+            const total = startSizeA + startSizeB;
+            const newA = startSizeA + delta;
+            const newB = startSizeB - delta;
+
+            if (newA > 50 && newB > 50) {
+              elA.style.flex = `0 0 ${(newA / total) * 100}%`;
+              elB.style.flex = `0 0 ${(newB / total) * 100}%`;
+            }
+          };
+
+          const onMouseUp = () => {
+            resizer.classList.remove("dragging");
+            document.removeEventListener("mousemove", onMouseMove);
+            document.removeEventListener("mouseup", onMouseUp);
+          };
+
+          resizer.addEventListener("mousedown", onMouseDown);
+        }
+      }
+
+      const splitManager = new SplitManager();
+
+      // --- FILE HANDLING ---
+
+      async function loadFile(file) {
+        els.loading.style.display = "flex";
+        els.welcome.style.display = "none";
+        hideAnalysis(); // Hide analysis when new file loads
+
+        try {
+          let arrayBuffer;
+          let fileName;
+
+          if (file instanceof File) {
+            arrayBuffer = await file.arrayBuffer();
+            fileName = file.name;
+            // Save and render recents asynchronously
+            saveRecent(fileName, arrayBuffer)
+              .then(renderRecents)
+              .catch(console.error);
+          } else {
+            // Loaded from recent (has name and data)
+            arrayBuffer = file.data;
+            fileName = file.name;
+          }
+
+          currentDocName = fileName;
+          document.title = `${fileName} - DOCX Viewer`;
+
+          // Reset Cache and cleanup URLs
+          clearObjectUrls();
+          fileCache = {};
+          zipFilesMap = {};
+
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          currentZip = zip;
+
+          // Build Map
+          Object.keys(zip.files).forEach((path) => {
+            if (!zip.files[path].dir) zipFilesMap[path] = zip.files[path];
+          });
+
+          // Build Tree
+          renderFileTree(Object.keys(zipFilesMap));
+
+          // Show sidebar and switch to tree view
+          els.mainSidebar.classList.remove("hidden");
+          els.header.classList.remove("hidden");
+        } catch (err) {
+          console.error(err);
+          // Use custom UI instead of alert()
+          showAnalysis(
+            "**Error Loading File:** This file could not be processed. Please ensure it is a valid `.docx` file.",
+          );
+        } finally {
+          els.loading.style.display = "none";
+        }
+      }
+
+      function renderFileTree(paths) {
+        els.fileTree.innerHTML = "";
+        const root = {};
+
+        // Build hierarchy
+        paths.forEach((path) => {
+          const parts = path.split("/");
+          let current = root;
+          parts.forEach((part, i) => {
+            if (!current[part])
+              current[part] = i === parts.length - 1 ? null : {};
+            current = current[part];
+          });
+        });
+
+        function createNode(obj, container, prefix = "") {
+          const ul = document.createElement("ul");
+          const keys = Object.keys(obj).sort((a, b) => {
+            const aIsFolder = obj[a] !== null;
+            const bIsFolder = obj[b] !== null;
+            if (aIsFolder && !bIsFolder) return -1;
+            if (!aIsFolder && bIsFolder) return 1;
+            return a.localeCompare(b);
+          });
+
+          keys.forEach((key) => {
+            const fullPath = prefix ? `${prefix}/${key}` : key;
+            const li = document.createElement("li");
+            const div = document.createElement("div");
+            div.className = "labelContainer";
+
+            const isFolder = obj[key] !== null;
+
+            let iconStr = isFolder ? "folder" : getIconForFile(fullPath);
+            if (isFolder) {
+              li.className = "folder";
+              div.innerHTML = `<span class="arrow">▶</span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
+              div.onclick = (e) => {
+                e.stopPropagation();
+                li.classList.toggle("open");
+              };
+              li.appendChild(div);
+              createNode(obj[key], li, fullPath);
+            } else {
+              li.className = `file file-${iconStr}`;
+              if (iconStr === "code") li.classList.add("file-xml");
+              if (iconStr === "image") li.classList.add("file-image");
+
+              div.innerHTML = `<span class="arrow"></span><span class="material-icons tree-icon">${iconStr}</span><span>${key}</span>`;
+              div.onclick = async (e) => {
+                e.stopPropagation();
+                document
+                  .querySelectorAll(".file-tree li.selected")
+                  .forEach((el) => el.classList.remove("selected"));
+                li.classList.add("selected");
+                await openFile(fullPath);
+              };
+              li.appendChild(div);
+            }
+            ul.appendChild(li);
+          });
+          container.appendChild(ul);
+        }
+
+        createNode(root, els.fileTree);
+      }
+
+      async function openFile(path) {
+        const activePane = splitManager.getActive();
+        if (!activePane) return;
+
+        if (fileCache[path]) {
+          activePane.openTab(
+            path,
+            path.split("/").pop(),
+            fileCache[path].content,
+            fileCache[path].type,
+          );
+          return;
+        }
+
+        const zipObj = zipFilesMap[path];
+        if (!zipObj) return;
+
+        els.loading.style.display = "flex";
+        try {
+          let content, type;
+          if (isImage(path)) {
+            const blob = await zipObj.async("blob");
+            content = URL.createObjectURL(blob);
+            blobUrls.push(content); // Add to cleanup list
+            type = "image";
+          } else {
+            const text = await zipObj.async("text");
+            content =
+              path.endsWith(".xml") || path.endsWith(".rels")
+                ? formatXML(text)
+                : text;
+            type =
+              path.endsWith(".xml") || path.endsWith(".rels") ? "xml" : "text";
+          }
+
+          fileCache[path] = { content, type };
+          activePane.openTab(path, path.split("/").pop(), content, type);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          els.loading.style.display = "none";
+        }
+      }
+
+      async function renderRecents() {
+        const files = await getRecents();
+        els.landingRecentList.innerHTML = "";
+
+        // Update Sidebar
+        if (files.length === 0) {
+          els.landingRecentContainer.style.display = "none";
+        } else {
+          els.landingRecentContainer.style.display = "block";
+        }
+
+        files.slice(0, 3).forEach((file) => {
+          // Sidebar Item
+          const div = document.createElement("div");
+          div.className = "recent-item";
+          div.innerHTML = `
+                    <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+                        <span class="material-icons text-blue-400 text-sm shrink-0">description</span>
+                        <span class="truncate" title="${file.name}">${file.name}</span>
+                    </div>
+                    <button class="delete-recent material-icons text-[16px] shrink-0 ml-2 hover:text-red-400" title="Remove">close</button>
+                `;
+          div.querySelector(".delete-recent").onclick = async (e) => {
+            e.stopPropagation();
+            await deleteRecent(file.name);
+            renderRecents();
+          };
+          div.onclick = () => loadFile(file);
+
+          // Landing Page Card
+          const card = document.createElement("div");
+          card.className = "landing-recent-card";
+          card.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-blue-400">
+                        <span class="material-icons">description</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-200 truncate" title="${file.name}">${file.name}</div>
+                        <div class="text-xs text-gray-500">${new Date(file.timestamp).toLocaleDateString()}</div>
+                    </div>
+                    <span class="material-icons text-gray-600 text-sm">arrow_forward</span>
+                `;
+          card.onclick = () => loadFile(file);
+          els.landingRecentList.appendChild(card);
+        });
+      }
+
+      // --- SEARCH ---
+      els.search.addEventListener("input", (e) => {
+        const term = e.target.value.toLowerCase();
+        const files = els.fileTree.querySelectorAll("li.file");
+        files.forEach((li) => {
+          const name = li
+            .querySelector("span:last-child")
+            .innerText.toLowerCase();
+          const match = name.includes(term);
+          li.style.display = match ? "block" : "none";
+          // Expand parents if matched
+          if (match) {
+            let parent = li.parentElement.closest(".folder");
+            while (parent) {
+              parent.classList.add("open");
+              parent = parent.parentElement.closest(".folder");
+            }
+          }
+        });
+      });
+
+      // --- DRAG AND DROP ---
+      window.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        els.dragOverlay.style.display = "flex";
+      });
+      window.addEventListener("dragleave", (e) => {
+        if (e.target === els.dragOverlay)
+          els.dragOverlay.style.display = "none";
+      });
+      window.addEventListener("drop", (e) => {
+        e.preventDefault();
+        els.dragOverlay.style.display = "none";
+        if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+      });
+
+      // --- SERVICE WORKER & ECMA STANDARD ---
+      async function autoLoadEcmaStandard() {
+        try {
+          if (localStorage.getItem("ecma_standard_content")) {
+            ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
+            console.log("✓ ECMA loaded from localStorage (" + (ecmaStandardContent.length/1024/1024).toFixed(1) + "MB)");
+            return;
+          }
+          
+          if (!('serviceWorker' in navigator)) {
+            console.warn("Service Workers not supported");
+            return;
+          }
+          
+          console.log("Registering Service Worker for ECMA extraction...");
+          const reg = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          console.log("Service Worker registered");
+          
+          // Wait for active controller or registration update
+          let controller = reg.active || reg.controller;
+          if (!controller) {
+            await new Promise((resolve) => {
+              reg.onupdatefound = () => {
+                const worker = reg.installing;
+                worker.onstatechange = () => {
+                  if (worker.state === 'activated') {
+                    controller = reg.active;
+                    resolve();
+                  }
+                };
+              };
+              // Timeout if activation takes too long
+              setTimeout(resolve, 3000);
+            });
+          }
+          
+          if (navigator.serviceWorker.controller) {
+            startEcmaExtraction();
+          }
+        } catch (e) {
+          console.warn("ECMA autoload error:", e?.message || "Unknown error");
+        }
+      }
+
+      function startEcmaExtraction() {
+        if (!navigator.serviceWorker.controller) {
+          console.warn("No active Service Worker controller");
+          return;
+        }
+        
+        const indicator = document.getElementById("ecmaLoadingIndicator");
+        const statusText = document.getElementById("ecmaStatusText");
+        
+        if (indicator) {
+          indicator.classList.remove("hidden");
+          console.log("✓ ECMA indicator visible");
+        }
+        console.log("Starting ECMA extraction in background...");
+        navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
+        
+        const messageHandler = (event) => {
+          const { type, content, pages, size, current, total, percent, message } = event.data;
+          console.log("[SW Message]", type, percent || "", message || "");
+          
+          if (type === "download_start") {
+            if (statusText) statusText.textContent = "📥 Downloading PDF...";
+            console.log("Downloading ECMA-376 PDF...");
+          } else if (type === "download_progress") {
+            if (statusText) statusText.textContent = `📥 Downloading ${percent}%...`;
+          } else if (type === "download_complete") {
+            if (statusText) statusText.textContent = `📥 Downloaded ${(size/1024/1024).toFixed(1)}MB`;
+            console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
+          } else if (type === "extraction_start") {
+            if (statusText) statusText.textContent = "⚙️ Extracting...";
+          } else if (type === "extraction_progress") {
+            if (statusText) statusText.textContent = `⚙️ Extracting ${percent}% (${current}/${total})`;
+            console.log(`  Extraction: ${current}/${total} (${percent}%)`);
+          } else if (type === "complete") {
+            ecmaStandardContent = content;
+            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+            console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB ready`);
+            if (indicator && statusText) {
+              statusText.textContent = "✓ ECMA-376 Ready";
+              const spinner = indicator.querySelector(".ecma-spinner");
+              if (spinner) {
+                spinner.classList.add("done");
+                spinner.textContent = "✓";
+              }
+              setTimeout(() => indicator.classList.add("hidden"), 2000);
+            }
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
+          } else if (type === "error") {
+            console.error("ECMA extraction failed:", message);
+            if (statusText) statusText.textContent = "❌ Load failed";
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
+          }
+        };
+        
+        navigator.serviceWorker.addEventListener("message", messageHandler);
+      }
+
+      // --- INIT ---
+      // --- SETTINGS MODAL ---
       try {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const text = content.items.map(item => item.str).join(" ");
-        await savePageToDB(i, text);
-        extractedCount++;
+        const settingsModal = document.getElementById("settingsModal");
+        const settingsBtn = document.getElementById("settingsBtn");
+        const closeSettings = document.getElementById("closeSettings");
+        const saveLlmKeys = document.getElementById("saveLlmKeys");
+        const clearLlmKeys = document.getElementById("clearLlmKeys");
+        const pdfFileInput = document.getElementById("pdfFileInput");
+        const pdfFileStatus = document.getElementById("pdfFileStatus");
+        
+        // Handle manual PDF upload override (disabled - using Service Worker)
+        if (pdfFileInput) {
+          pdfFileInput.disabled = true;
+        }
+        if (pdfFileStatus) {
+          pdfFileStatus.innerHTML = '<p class="text-gray-400">Extracting ECMA-376 automatically...</p>';
+        }
 
-        if (i % 500 === 0) {
-          const pct = Math.round((i / totalPages) * 100);
-          self.postMessage({ type: "extraction_progress", current: i, total: totalPages, percent: pct });
+        if (settingsBtn) {
+          settingsBtn.onclick = () => {
+            if (document.getElementById("openaiKey"))
+              document.getElementById("openaiKey").value = llmSettings.openai;
+            if (document.getElementById("geminiKey"))
+              document.getElementById("geminiKey").value = llmSettings.gemini;
+            if (document.getElementById("anthropicKey"))
+              document.getElementById("anthropicKey").value =
+                llmSettings.anthropic;
+            settingsModal.classList.remove("hidden");
+          };
+        }
+        if (closeSettings) {
+          closeSettings.onclick = () => settingsModal.classList.add("hidden");
+        }
+        if (settingsModal) {
+          settingsModal.onclick = (e) => {
+            if (e.target === settingsModal)
+              settingsModal.classList.add("hidden");
+          };
+        }
+        if (saveLlmKeys) {
+          saveLlmKeys.onclick = () => {
+            llmSettings.openai = (
+              document.getElementById("openaiKey")?.value || ""
+            ).trim();
+            llmSettings.gemini = (
+              document.getElementById("geminiKey")?.value || ""
+            ).trim();
+            llmSettings.anthropic = (
+              document.getElementById("anthropicKey")?.value || ""
+            ).trim();
+            localStorage.setItem("llm_openai_key", llmSettings.openai);
+            localStorage.setItem("llm_gemini_key", llmSettings.gemini);
+            localStorage.setItem("llm_anthropic_key", llmSettings.anthropic);
+            showAnalysis(
+              "**API Keys Saved!** Your keys are stored locally in your browser and never sent to our servers.",
+            );
+            settingsModal.classList.add("hidden");
+          };
+        }
+        if (clearLlmKeys) {
+          clearLlmKeys.onclick = () => {
+            llmSettings = { openai: "", gemini: "", anthropic: "" };
+            localStorage.removeItem("llm_openai_key");
+            localStorage.removeItem("llm_gemini_key");
+            localStorage.removeItem("llm_anthropic_key");
+            showAnalysis(
+              "🗑️ **API Keys Cleared!** Analysis will use local processing.",
+            );
+            settingsModal.classList.add("hidden");
+          };
         }
       } catch (e) {
-        console.error(`SW: Page ${i} failed:`, e.message);
+        console.warn("Settings modal setup error:", e?.message);
       }
-    }
 
-    const allText = await getAllPagesFromDB();
-    self.postMessage({ 
-      type: "complete", 
-      content: allText,
-      pages: extractedCount,
-      size: allText.length 
-    });
-  } catch (error) {
-    self.postMessage({ type: "error", message: "ECMA extraction error: " + error.toString() });
-  }
-}
+      const hiddenInput = document.createElement("input");
+      hiddenInput.type = "file";
+      hiddenInput.accept = ".docx";
+      hiddenInput.onchange = (e) => {
+        if (e.target.files[0]) loadFile(e.target.files[0]);
+      };
+      els.uploadBtn.onclick = () => hiddenInput.click();
+      els.landingUploadBtn.onclick = () => hiddenInput.click(); // Connect landing button
 
-self.onmessage = (event) => {
-  try {
-    const { command } = event.data;
-    if (command === "extractECMA") {
-      extractAndStorePDF();
-    }
-  } catch (e) {
-    self.postMessage({ type: "error", message: "SW error: " + e.toString() });
-  }
-};
+      (async function bootstrap() {
+        // Show header immediately to display ECMA loading indicator
+        els.header.classList.remove("hidden");
+        
+        splitManager.init(els.editorWrapper);
+        await loadMonaco();
+        await initializeAI();
+        
+        // Start ECMA loading in background (non-blocking)
+        autoLoadEcmaStandard();
+
+        splitManager.panes.forEach((p) => {
+          if (!p.editor && p.editorContainer.style.display !== "none") {
+            p.initEditor();
+            if (p.activeTabPath) p.setActiveTab(p.activeTabPath);
+          }
+        });
+        await renderRecents();
+      })();
+    </script>
+  </body>
+</html>
