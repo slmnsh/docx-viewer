@@ -1171,11 +1171,14 @@
       }
 
       function showAnalysis(markdown) {
-        // Sanitize markdown before passing to custom HTML parser (optional but good practice)
-        var converter = new showdown.Converter()
+        var converter = new showdown.Converter({
+          tables: true,
+          tasklists: true,
+          strikethrough: true,
+          ghCodeBlocks: true
+        })
         els.geminiAnalysisContent.innerHTML = converter.makeHtml(markdown)
         els.geminiAnalysisBox.classList.remove("hidden");
-        // Force reflow and add visible class
         void els.geminiAnalysisBox.offsetWidth;
         els.geminiAnalysisBox.classList.add("visible");
       }
