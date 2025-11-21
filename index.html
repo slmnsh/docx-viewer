@@ -368,9 +368,9 @@
         opacity: 1;
       }
       #geminiAnalysisBox h3 {
-        background: var(--accent);
+        background: linear-gradient(135deg, var(--accent) 0%, #0085cc 100%);
         color: white;
-        padding: 12px 18px; /* More padding */
+        padding: 16px 18px;
         margin: 0;
         border-top-left-radius: 11px;
         border-top-right-radius: 11px;
@@ -379,6 +379,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 12px;
       }
       #geminiAnalysisContent {
         padding: 15px;
@@ -412,21 +413,30 @@
         margin-bottom: 5px;
       }
       #geminiAnalysisContent code {
-        background: #444;
-        padding: 2px 4px;
+        background: rgba(0, 170, 255, 0.15);
+        padding: 2px 6px;
         border-radius: 4px;
-        font-family: monospace;
+        font-family: 'Fira Code', 'SF Mono', Monaco, monospace;
         font-size: 13px;
-        color: #a9ff00; /* HIGH CONTRAST COLOR FOR CODE TEXT */
+        color: #5fb3f5;
+        border: 1px solid rgba(0, 170, 255, 0.2);
       }
       #geminiAnalysisContent pre {
-        background: #1e1e30; /* Darker pre background */
-        padding: 10px;
-        border-radius: 6px;
+        background: #0d0d14;
+        padding: 12px 14px;
+        border-radius: 8px;
         overflow-x: auto;
-        margin: 10px 0;
-        font-size: 13px;
-        border: 1px solid #353456;
+        margin: 12px 0;
+        font-size: 12px;
+        border: 1px solid #2a2a3a;
+        color: #b0b8c8;
+        line-height: 1.5;
+      }
+      #geminiAnalysisContent pre code {
+        background: transparent;
+        padding: 0;
+        border: none;
+        color: #5fb3f5;
       }
 
       /* Recent Files Sidebar */
@@ -822,11 +832,18 @@
 
     <!-- LLM Analysis Box -->
     <div id="geminiAnalysisBox" class="hidden">
-      <h3>
-        DOCX XML
+      <h3 style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+          <span class="material-icons" style="color: white; font-size: 32px;">description</span>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-size: 12px; color: #999; font-weight: normal;">XML Analysis</span>
+            <span id="analysisModelName" style="color: white; font-weight: bold; font-size: 14px;">Local XML Parser</span>
+          </div>
+        </div>
         <button
           id="closeAnalysisBtn"
-          class="material-icons text-white hover:text-gray-300 text-[20px] ml-2"
+          class="material-icons"
+          style="color: white; font-size: 24px; background: none; border: none; cursor: pointer;"
         >
           close
         </button>
@@ -1456,8 +1473,12 @@
           try {
             const result = await analyzeXMLWithBestAvailable(selectedText);
             if (result && result.content) {
-              const modelInfo = `\n\n> **Model Used:** ${result.model || "Unknown"}\n`;
-              showAnalysis(result.content + modelInfo);
+              // Update model name in header
+              const modelNameEl = document.getElementById("analysisModelName");
+              if (modelNameEl) {
+                modelNameEl.textContent = result.model || "Local XML Parser";
+              }
+              showAnalysis(result.content);
             } else {
               showAnalysis("**Error:** Analysis returned no content.");
             }
