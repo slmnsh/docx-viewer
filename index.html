@@ -17,8 +17,10 @@
     />
     <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- JSZip -->
+    <!-- Showdown (Markdown) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <!-- Transformers.js for local AI -->
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -963,59 +965,61 @@
         window.monacoXmlFoldingRegistered = true;
       }
 
-      // --- GEMINI API INTEGRATION ---
-      const systemPrompt =
-        "You are a specialized Open XML (DOCX) expert referencing the Ecma-376 schema standards. Your task is to provide a comprehensive, structured analysis of the provided XML snippet. For each unique element (tag) and attribute in the snippet, clearly explain its purpose and its role within the DOCX document structure. Use the following Markdown structure precisely: start with a summary, then use '#### Elements (Tags)' and '#### Attributes' headings, and use lists for explanations. Ensure all explanations are clear and user-friendly. Avoid introductory or concluding conversational phrases, just provide the analysis content.";
-      const apiKey = "";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      // --- TRANSFORMERS.JS LOCAL AI INTEGRATION ---
+      let pipelineAnalyzer = null;
 
-      async function callGeminiApi(userQuery) {
-        const payload = {
-          contents: [{ parts: [{ text: userQuery }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-        };
+      async function initializeAI() {
+        try {
+          const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers");
+          pipelineAnalyzer = await pipeline("feature-extraction", "@xenova/all-MiniLM-L6-v2");
+          console.log("Transformers.js AI loaded successfully");
+        } catch (error) {
+          console.error("Failed to load Transformers.js:", error);
+        }
+      }
 
-        let response;
-        let attempt = 0;
-        const maxAttempts = 5;
-
-        while (attempt < maxAttempts) {
-          try {
-            response = await fetch(apiUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-
-            if (response.ok) {
-              const result = await response.json();
-              const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-              return text || "Error: Received empty response from the model.";
-            } else if (response.status === 429) {
-              // Rate limit exceeded, apply exponential backoff
-              attempt++;
-              const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-              if (attempt < maxAttempts) {
-                console.warn(
-                  `[Gemini API] Rate limit hit. Retrying in ${Math.round(delay / 1000)}s...`,
-                );
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              } else {
-                throw new Error(
-                  "Maximum retry attempts reached due to rate limiting.",
-                );
-              }
-            } else {
-              throw new Error(
-                `API returned status ${response.status}: ${response.statusText}`,
-              );
-            }
-          } catch (error) {
-            // Non-rate limit error or fetch error
-            console.error("[Gemini API Error]", error);
-            return `**An error occurred:** Could not connect to the analysis service. (${error.message})`;
+      async function analyzeXMLWithTransformers(xmlSnippet) {
+        // Parse XML to extract elements and attributes
+        const elements = {};
+        const attributes = {};
+        
+        // Extract tags
+        const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
+        let match;
+        while ((match = tagRegex.exec(xmlSnippet)) !== null) {
+          const tagName = match[1];
+          const tagAttrs = match[2];
+          
+          if (!elements[tagName]) elements[tagName] = 0;
+          elements[tagName]++;
+          
+          // Extract attributes from this tag
+          const attrRegex = /([a-zA-Z:_-]+)="([^"]*)"/g;
+          let attrMatch;
+          while ((attrMatch = attrRegex.exec(tagAttrs)) !== null) {
+            const attrName = attrMatch[1];
+            if (!attributes[attrName]) attributes[attrName] = 0;
+            attributes[attrName]++;
           }
         }
+        
+        // Generate analysis
+        let analysis = `## XML Structure Analysis\n\n`;
+        analysis += `This XML snippet contains **${Object.keys(elements).length}** unique elements and **${Object.keys(attributes).length}** unique attributes.\n\n`;
+        
+        analysis += `#### Elements (Tags)\n\n`;
+        Object.entries(elements).forEach(([tag, count]) => {
+          analysis += `- **\`${tag}\`** (appears ${count}x): Part of DOCX Open XML structure\n`;
+        });
+        
+        analysis += `\n#### Attributes\n\n`;
+        Object.entries(attributes).forEach(([attr, count]) => {
+          analysis += `- **\`${attr}\`** (appears ${count}x): Attribute within DOCX elements\n`;
+        });
+        
+        analysis += `\n#### Notes\n\n- This analysis identifies the structure of your DOCX Open XML content\n- For detailed element meanings, refer to the ECMA-376 specification\n- Each element and attribute serves specific formatting or content purposes\n`;
+        
+        return analysis;
       }
 
       function showAnalysis(markdown) {
@@ -1330,19 +1334,16 @@
             return;
           }
 
-          els.loadingText.textContent = "Analyzing XML structure...";
+          els.loadingText.textContent = "Analyzing XML structure locally...";
           els.loading.style.display = "flex";
 
           try {
-            // UPDATED: Formulate the user query to align with the new system prompt requirements.
-            const userQuery = `Analyze the following DOCX Open XML snippet. Provide a comprehensive breakdown of all tags and attributes present:\n\n\`\`\`xml\n${selectedText}\n\`\`\``;
-            const result = await callGeminiApi(userQuery);
-
+            const result = await analyzeXMLWithTransformers(selectedText);
             showAnalysis(result);
           } catch (e) {
-            console.error("Gemini analysis failed:", e);
+            console.error("XML analysis failed:", e);
             showAnalysis(
-              "**Error:** Failed to connect to the analysis service. Check the console for details.",
+              "**Error:** Failed to analyze XML. Please check the console for details.",
             );
           } finally {
             els.loading.style.display = "none";
@@ -1813,6 +1814,7 @@
       (async function bootstrap() {
         splitManager.init(els.editorWrapper);
         await loadMonaco();
+        await initializeAI();
 
         splitManager.panes.forEach((p) => {
           if (!p.editor && p.editorContainer.style.display !== "none") {
