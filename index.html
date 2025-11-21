@@ -19,7 +19,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Showdown (Markdown) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <!-- No external AI required - local analysis only -->
+    <!-- Transformers.js for local AI -->
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -964,47 +965,25 @@
         window.monacoXmlFoldingRegistered = true;
       }
 
-      // --- LOCAL OPENXML SCHEMA ANALYSIS ---
-      const openxmlSchemaMap = {
-        "p:p": "Paragraph element - Contains paragraph-level content",
-        "p:r": "Run element - Contains text runs with formatting",
-        "p:t": "Text element - Actual text content",
-        "w:p": "Word paragraph - Main paragraph container",
-        "w:r": "Word run - Text with consistent formatting",
-        "w:t": "Word text - Text content in Word format",
-        "w:rPr": "Run properties - Formatting for text run",
-        "w:pPr": "Paragraph properties - Formatting for paragraph",
-        "w:b": "Bold - Bold formatting",
-        "w:i": "Italic - Italic formatting",
-        "w:u": "Underline - Underline formatting",
-        "w:color": "Color attribute - Text color",
-        "w:sz": "Size attribute - Font size",
-        "w:rFonts": "Font name - Font family selection",
-        "w:body": "Body element - Document body container",
-        "w:document": "Document root - Root element of document",
-        "w:tbl": "Table - Table container",
-        "w:tr": "Table row - Row in table",
-        "w:tc": "Table cell - Cell in table",
-        "w:picture": "Picture/Image - Image element",
-        "wp:inline": "Inline image - Image in text",
-        "wp:anchor": "Anchored image - Positioned image",
-        "r:embed": "Relationship embed - Reference to embedded file",
-        "rel:id": "Relationship ID - Link to document part",
-        "a:p": "DrawingML paragraph - Paragraph in shapes",
-        "a:r": "DrawingML run - Run in shapes",
-        "a:t": "DrawingML text - Text in shapes"
-      };
+      // --- TRANSFORMERS.JS LOCAL AI INTEGRATION ---
+      let pipelineAnalyzer = null;
 
       async function initializeAI() {
-        console.log("Local OpenXML analysis initialized");
+        try {
+          const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers");
+          pipelineAnalyzer = await pipeline("feature-extraction", "@xenova/all-MiniLM-L6-v2");
+          console.log("Transformers.js AI loaded successfully");
+        } catch (error) {
+          console.error("Failed to load Transformers.js:", error);
+        }
       }
 
-      async function analyzeXMLWithOpenXMLMap(xmlSnippet) {
+      async function analyzeXMLWithTransformers(xmlSnippet) {
+        // Parse XML to extract elements and attributes
         const elements = {};
         const attributes = {};
-        const details = [];
         
-        // Extract tags and attributes
+        // Extract tags
         const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
         let match;
         while ((match = tagRegex.exec(xmlSnippet)) !== null) {
@@ -1025,32 +1004,20 @@
         }
         
         // Generate analysis
-        let analysis = `## DOCX OpenXML Structure Analysis\n\n`;
-        analysis += `**Summary:** This XML snippet contains **${Object.keys(elements).length}** unique elements and **${Object.keys(attributes).length}** unique attributes.\n\n`;
+        let analysis = `## XML Structure Analysis\n\n`;
+        analysis += `This XML snippet contains **${Object.keys(elements).length}** unique elements and **${Object.keys(attributes).length}** unique attributes.\n\n`;
         
         analysis += `#### Elements (Tags)\n\n`;
         Object.entries(elements).forEach(([tag, count]) => {
-          const description = openxmlSchemaMap[tag] || "Part of DOCX Open XML structure (ECMA-376)";
-          analysis += `- **\`${tag}\`** (appears ${count}x): ${description}\n`;
+          analysis += `- **\`${tag}\`** (appears ${count}x): Part of DOCX Open XML structure\n`;
         });
         
         analysis += `\n#### Attributes\n\n`;
         Object.entries(attributes).forEach(([attr, count]) => {
-          let description = "Attribute within DOCX elements";
-          if (attr.includes("val")) description = "Value attribute - specifies element value";
-          else if (attr.includes("id")) description = "Identifier - unique reference";
-          else if (attr.includes("type")) description = "Type specifier - defines element type";
-          else if (attr.includes("name")) description = "Name attribute - element name";
-          analysis += `- **\`${attr}\`** (appears ${count}x): ${description}\n`;
+          analysis += `- **\`${attr}\`** (appears ${count}x): Attribute within DOCX elements\n`;
         });
         
-        analysis += `\n#### OpenXML Notes\n\n`;
-        analysis += `- This snippet follows the **ECMA-376** standard for Office Open XML\n`;
-        analysis += `- Namespace prefixes (w:, p:, a:, etc.) indicate different schema parts\n`;
-        analysis += `- **w:** = WordprocessingML (core Word formatting)\n`;
-        analysis += `- **p:** = PresentationML (PowerPoint)\n`;
-        analysis += `- **a:** = DrawingML (shapes and graphics)\n`;
-        analysis += `- **r:** = Relationships (links between parts)\n`;
+        analysis += `\n#### Notes\n\n- This analysis identifies the structure of your DOCX Open XML content\n- For detailed element meanings, refer to the ECMA-376 specification\n- Each element and attribute serves specific formatting or content purposes\n`;
         
         return analysis;
       }
@@ -1371,7 +1338,7 @@
           els.loading.style.display = "flex";
 
           try {
-            const result = await analyzeXMLWithOpenXMLMap(selectedText);
+            const result = await analyzeXMLWithTransformers(selectedText);
             showAnalysis(result);
           } catch (e) {
             console.error("XML analysis failed:", e);
