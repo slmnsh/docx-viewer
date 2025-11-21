@@ -786,8 +786,8 @@
           <h1 class="font-bold text-lg text-[var(--text-main)]">
             DOCX Internals Viewer
           </h1>
-          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-4 px-3 py-1 bg-[rgba(107,125,255,0.1)] border border-[rgba(107,125,255,0.3)] rounded text-xs text-[#6b7dff]">
-            <span class="ecma-spinner inline-block w-2 h-2 border-2 border-[rgba(107,125,255,0.3)] border-t-[#6b7dff] rounded-full animate-spin"></span>
+          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-6 px-3 py-1.5 bg-[rgba(107,125,255,0.15)] border border-[rgba(107,125,255,0.4)] rounded-lg text-xs font-medium text-[#6b7dff] whitespace-nowrap">
+            <span class="ecma-spinner inline-block w-2.5 h-2.5 border-2 border-[rgba(107,125,255,0.3)] border-t-[#6b7dff] rounded-full animate-spin flex-shrink-0"></span>
             <span id="ecmaStatusText">Loading ECMA-376...</span>
           </div>
         </div>
@@ -2305,25 +2305,29 @@
         const indicator = document.getElementById("ecmaLoadingIndicator");
         const statusText = document.getElementById("ecmaStatusText");
         
-        if (indicator) indicator.classList.remove("hidden");
+        if (indicator) {
+          indicator.classList.remove("hidden");
+          console.log("✓ ECMA indicator visible");
+        }
         console.log("Starting ECMA extraction in background...");
         navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
         
         const messageHandler = (event) => {
           const { type, content, pages, size, current, total, percent, message } = event.data;
+          console.log("[SW Message]", type, percent || "", message || "");
           
           if (type === "download_start") {
-            if (statusText) statusText.textContent = "Downloading PDF...";
+            if (statusText) statusText.textContent = "📥 Downloading PDF...";
             console.log("Downloading ECMA-376 PDF...");
           } else if (type === "download_progress") {
-            if (statusText) statusText.textContent = `Downloading ${percent}%...`;
+            if (statusText) statusText.textContent = `📥 Downloading ${percent}%...`;
           } else if (type === "download_complete") {
-            if (statusText) statusText.textContent = `Downloaded ${(size/1024/1024).toFixed(1)}MB`;
+            if (statusText) statusText.textContent = `📥 Downloaded ${(size/1024/1024).toFixed(1)}MB`;
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
           } else if (type === "extraction_start") {
-            if (statusText) statusText.textContent = "Extracting...";
+            if (statusText) statusText.textContent = "⚙️ Extracting...";
           } else if (type === "extraction_progress") {
-            if (statusText) statusText.textContent = `Extracting ${percent}% (${current}/${total} pages)`;
+            if (statusText) statusText.textContent = `⚙️ Extracting ${percent}% (${current}/${total})`;
             console.log(`  Extraction: ${current}/${total} (${percent}%)`);
           } else if (type === "complete") {
             ecmaStandardContent = content;
@@ -2332,13 +2336,16 @@
             if (indicator && statusText) {
               statusText.textContent = "✓ ECMA-376 Ready";
               const spinner = indicator.querySelector(".ecma-spinner");
-              if (spinner) spinner.classList.add("done");
+              if (spinner) {
+                spinner.classList.add("done");
+                spinner.textContent = "✓";
+              }
               setTimeout(() => indicator.classList.add("hidden"), 2000);
             }
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           } else if (type === "error") {
             console.error("ECMA extraction failed:", message);
-            if (statusText) statusText.textContent = "Load failed";
+            if (statusText) statusText.textContent = "❌ Load failed";
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };
@@ -2432,6 +2439,9 @@
       els.landingUploadBtn.onclick = () => hiddenInput.click(); // Connect landing button
 
       (async function bootstrap() {
+        // Show header immediately to display ECMA loading indicator
+        els.header.classList.remove("hidden");
+        
         splitManager.init(els.editorWrapper);
         await loadMonaco();
         await initializeAI();
