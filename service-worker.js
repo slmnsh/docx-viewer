@@ -1,6 +1,6 @@
 const DB_NAME = "DocxViewerECMA";
 const STORE_NAME = "pdf_binary";
-const PDF_URL = "/ecma-standard.pdf";
+const PDF_URL = "/docx-viewer/ecma-standard.pdf";
 let db = null;
 
 function initDB() {
