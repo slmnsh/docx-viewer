@@ -2161,6 +2161,52 @@
         if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
       });
 
+      // --- PDF EXTRACTION & AUTO-LOAD ECMA STANDARD ---
+      async function extractPdfText(arrayBuffer) {
+        try {
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let text = "";
+          for (let i = 1; i <= Math.min(pdf.numPages, 100); i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(item => item.str).join(" ") + "\n";
+          }
+          return text;
+        } catch (e) {
+          console.error("PDF extraction error:", e);
+          return "";
+        }
+      }
+      
+      async function autoLoadEcmaStandard() {
+        try {
+          if (localStorage.getItem("ecma_standard_content")) {
+            ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
+            console.log("ECMA standard loaded from cache");
+            return;
+          }
+          
+          console.log("Fetching ECMA-376 Standard from official source...");
+          const zipUrl = "https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip";
+          const response = await fetch(zipUrl);
+          const zipData = await response.arrayBuffer();
+          
+          const zip = await JSZip.loadAsync(zipData);
+          const pdfFile = Object.keys(zip.files).find(f => f.includes("Fundamentals"));
+          
+          if (pdfFile) {
+            console.log("Extracting PDF: " + pdfFile);
+            const pdfData = await zip.files[pdfFile].async("arraybuffer");
+            ecmaStandardContent = await extractPdfText(pdfData);
+            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+            localStorage.setItem("ecma_standard_name", pdfFile.split("/").pop());
+            console.log("✓ ECMA-376 Standard loaded (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
+          }
+        } catch (e) {
+          console.warn("Auto-load ECMA standard skipped:", e?.message);
+        }
+      }
+
       // --- INIT ---
       // --- SETTINGS MODAL ---
       try {
@@ -2169,6 +2215,23 @@
         const closeSettings = document.getElementById("closeSettings");
         const saveLlmKeys = document.getElementById("saveLlmKeys");
         const clearLlmKeys = document.getElementById("clearLlmKeys");
+        const pdfFileInput = document.getElementById("pdfFileInput");
+        const pdfFileStatus = document.getElementById("pdfFileStatus");
+        
+        // Handle manual PDF upload override
+        if (pdfFileInput) {
+          pdfFileInput.onchange = async (e) => {
+            if (e.target.files[0]) {
+              const file = e.target.files[0];
+              pdfFileStatus.innerHTML = '<p class="text-blue-400">Extracting PDF...</p>';
+              const arrayBuffer = await file.arrayBuffer();
+              ecmaStandardContent = await extractPdfText(arrayBuffer);
+              localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+              localStorage.setItem("ecma_standard_name", file.name);
+              pdfFileStatus.innerHTML = `<p class="text-green-400">✓ Standard loaded: ${file.name}</p>`;
+            }
+          };
+        }
 
         if (settingsBtn) {
           settingsBtn.onclick = () => {
@@ -2240,6 +2303,7 @@
         splitManager.init(els.editorWrapper);
         await loadMonaco();
         await initializeAI();
+        await autoLoadEcmaStandard(); // Load ECMA-376 standard for context
 
         splitManager.panes.forEach((p) => {
           if (!p.editor && p.editorContainer.style.display !== "none") {
