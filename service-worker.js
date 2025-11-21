@@ -1,5 +1,5 @@
-// Import PDF.js library
-importScripts('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js');
+// Import PDF.js library - using ES module build
+importScripts('https://mozilla.github.io/pdf.js/build/pdf.mjs');
 
 const DB_NAME = "DocxViewerECMA";
 const STORE_NAME = "pdf_binary";
@@ -87,9 +87,12 @@ async function extractPDF() {
       client.postMessage({ type: "extraction_start" });
     });
     
-    // Set up PDF.js worker
+    // Set up PDF.js worker - CRITICAL: must be done before getDocument
     if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+      console.log("PDF.js worker configured");
+    } else {
+      throw new Error("PDF.js not loaded in service worker");
     }
     
     // Get PDF binary from IndexedDB
@@ -110,8 +113,12 @@ async function extractPDF() {
       throw new Error("PDF binary not found in cache");
     }
     
-    // Extract text using PDF.js
-    const pdf = await pdfjsLib.getDocument({ data: pdfBinary }).promise;
+    // Extract text using PDF.js - following Mozilla examples pattern
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBinary });
+    const pdf = await loadingTask.promise;
+    
+    console.log(`PDF loaded: ${pdf.numPages} pages`);
+    
     const totalPages = pdf.numPages;
     let extractedText = "";
     let extractedCount = 0;
@@ -129,12 +136,15 @@ async function extractPDF() {
           clients.forEach(client => {
             client.postMessage({ type: "extraction_progress", percent: pct });
           });
+          console.log(`Extracted ${i}/${totalPages}`);
         }
       } catch (e) {
         console.warn(`Page ${i} extraction failed:`, e.message);
       }
     }
 
+    console.log(`Extraction complete: ${extractedCount} pages, ${(extractedText.length/1024/1024).toFixed(1)}MB`);
+    
     clients.forEach(client => {
       client.postMessage({ 
         type: "extraction_complete", 
