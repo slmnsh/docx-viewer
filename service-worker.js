@@ -1,3 +1,6 @@
+// Import PDF.js library
+importScripts('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js');
+
 const DB_NAME = "DocxViewerECMA";
 const STORE_NAME = "pdf_binary";
 const PDF_URL = "/ecma-standard.pdf";
@@ -68,6 +71,7 @@ async function downloadPDF() {
       client.postMessage({ type: "download_complete", size: receivedLength });
     });
   } catch (error) {
+    console.error("PDF download failed:", error);
     const clients = await self.clients.matchAll();
     clients.forEach(client => {
       client.postMessage({ type: "error", message: error.toString() });
@@ -75,9 +79,87 @@ async function downloadPDF() {
   }
 }
 
+async function extractPDF() {
+  try {
+    const clients = await self.clients.matchAll();
+    
+    clients.forEach(client => {
+      client.postMessage({ type: "extraction_start" });
+    });
+    
+    // Set up PDF.js worker
+   if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
+    }
+    
+    // Get PDF binary from IndexedDB
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result);
+    });
+    
+    const pdfBinary = await new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const req = tx.objectStore(STORE_NAME).get("pdf");
+      req.onsuccess = () => resolve(req.result?.data);
+      req.onerror = () => resolve(null);
+    });
+    
+    if (!pdfBinary) {
+      throw new Error("PDF binary not found in cache");
+    }
+    
+    // Extract text using PDF.js
+    const pdf = await pdfjsLib.getDocument({ data: pdfBinary }).promise;
+    const totalPages = pdf.numPages;
+    let extractedText = "";
+    let extractedCount = 0;
+
+    for (let i = 1; i <= totalPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => item.str).join(" ");
+        extractedText += pageText + "\n";
+        extractedCount++;
+
+        if (i % Math.max(1, Math.floor(totalPages / 10)) === 0) {
+          const pct = Math.round((i / totalPages) * 100);
+          clients.forEach(client => {
+            client.postMessage({ type: "extraction_progress", percent: pct });
+          });
+        }
+      } catch (e) {
+        console.warn(`Page ${i} extraction failed:`, e.message);
+      }
+    }
+
+    clients.forEach(client => {
+      client.postMessage({ 
+        type: "extraction_complete", 
+        text: extractedText, 
+        pages: extractedCount 
+      });
+    });
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({ type: "extraction_error", message: error.toString() });
+    });
+  }
+}
+
 self.onmessage = (event) => {
-  const { command } = event.data;
-  if (command === "downloadPDF") {
-    downloadPDF();
+  try {
+    const { command } = event.data;
+    if (command === "downloadPDF") {
+      downloadPDF();
+    } else if (command === "extractPDF") {
+      extractPDF();
+    }
+  } catch (e) {
+    console.error("Service Worker error:", e);
   }
 };
