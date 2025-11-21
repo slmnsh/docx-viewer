@@ -28,10 +28,11 @@
     <!-- Transformers.js for local AI -->
     <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@3/dist/transformers.min.js"></script>
     <!-- PDF.js for ECMA-376 Standard extraction -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js"></script>
     <script>
-      if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      if (typeof pdfjsWorker !== 'undefined') {
+        // Worker will auto-load, but we can set a custom path if needed
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
       }
     </script>
 
@@ -2366,11 +2367,11 @@
       }
       
       async function extractPdfFromCache() {
+        const indicator = document.getElementById("ecmaLoadingIndicator");
+        const statusText = document.getElementById("ecmaStatusText");
+        
         try {
-          const indicator = document.getElementById("ecmaLoadingIndicator");
-          const statusText = document.getElementById("ecmaStatusText");
-          
-          // Wait for PDF.js to be available
+          // Wait for PDF.js to be fully loaded with worker
           let retries = 0;
           while (typeof pdfjsLib === 'undefined' && retries < 50) {
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -2381,6 +2382,12 @@
             console.error("PDF.js not loaded after waiting");
             if (statusText) statusText.textContent = "❌ PDF.js failed to load";
             return;
+          }
+          
+          // Ensure worker path is set correctly
+          if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
+            console.log("Worker path set to:", pdfjsLib.GlobalWorkerOptions.workerSrc);
           }
           
           // Open IndexedDB and get the PDF binary
@@ -2403,9 +2410,12 @@
             return;
           }
           
-          if (statusText) statusText.textContent = "Loading DOCX Context...";
+          console.log("PDF binary loaded, initializing PDF.js...");
+          if (statusText) statusText.textContent = "Extracting PDF text...";
           
           const pdf = await pdfjsLib.getDocument({ data: pdfBinary }).promise;
+          console.log(`✓ PDF loaded: ${pdf.numPages} pages`);
+          
           const totalPages = pdf.numPages;
           let extractedText = "";
           let extractedCount = 0;
@@ -2418,13 +2428,13 @@
               extractedText += pageText + "\n";
               extractedCount++;
 
-              if (i % 500 === 0) {
+              if (i % Math.max(1, Math.floor(totalPages / 10)) === 0) {
                 const pct = Math.round((i / totalPages) * 100);
-                if (statusText) statusText.textContent = `Loading DOCX Context ${pct}%`;
+                if (statusText) statusText.textContent = `Extracting PDF text ${pct}%`;
                 console.log(`  Extracted: ${i}/${totalPages} (${pct}%)`);
               }
             } catch (e) {
-              console.error(`Page ${i} extraction failed:`, e);
+              console.warn(`Page ${i} extraction failed:`, e.message);
             }
           }
 
@@ -2443,8 +2453,8 @@
           }
         } catch (error) {
           console.error("PDF extraction error:", error);
-          const statusText = document.getElementById("ecmaStatusText");
-          if (statusText) statusText.textContent = "❌ Load failed";
+          console.error("Error details:", error.message, error.stack);
+          if (statusText) statusText.textContent = "❌ PDF extraction failed";
         }
       }
 
