@@ -2267,93 +2267,16 @@
         if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
       });
 
-      // --- INLINE SERVICE WORKER ---
-      async function registerInlineServiceWorker() {
-        const workerCode = `
-const DB_NAME = "DocxViewerECMA";
-const STORE_NAME = "pdf_binary";
-const PDF_URL = "/ecma-standard.pdf";
-let db = null;
-
-function initDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      db = req.result;
-      resolve(db);
-    };
-    req.onupgradeneeded = (e) => {
-      if (!e.target.result.objectStoreNames.contains(STORE_NAME)) {
-        e.target.result.createObjectStore(STORE_NAME, { keyPath: "id" });
-      }
-    };
-  });
-}
-
-async function downloadPDF() {
-  try {
-    self.postMessage({ type: "download_start" });
-    const response = await fetch(PDF_URL);
-    if (!response.ok) throw new Error(\`PDF fetch failed: \${response.status}\`);
-    
-    const reader = response.body.getReader();
-    const contentLength = +response.headers.get('content-length');
-    let receivedLength = 0;
-    let chunks = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      receivedLength += value.length;
-      if (contentLength > 0) {
-        const pct = Math.round((receivedLength / contentLength) * 100);
-        self.postMessage({ type: "download_progress", percent: pct });
-      }
-    }
-
-    const buffer = new Uint8Array(receivedLength);
-    let position = 0;
-    for (let chunk of chunks) {
-      buffer.set(chunk, position);
-      position += chunk.length;
-    }
-
-    await initDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ id: "pdf", data: buffer });
-    
-    await new Promise((resolve) => {
-      tx.oncomplete = resolve;
-      tx.onerror = resolve;
-    });
-
-    self.postMessage({ type: "download_complete", size: receivedLength });
-  } catch (error) {
-    console.error("PDF download failed:", error);
-    self.postMessage({ type: "error", message: error.toString() });
-  }
-}
-
-self.onmessage = (event) => {
-  try {
-    const { command } = event.data;
-    if (command === "downloadPDF") {
-      downloadPDF();
-    }
-  } catch (e) {
-    console.error("Service Worker error:", e);
-    self.postMessage({ type: "error", message: e.toString() });
-  }
-};
-        `;
-
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        const workerUrl = URL.createObjectURL(blob);
-        const reg = await navigator.serviceWorker.register(workerUrl, { scope: '/' });
-        console.log("Service Worker registered");
-        return reg;
+      // --- SERVICE WORKER REGISTRATION ---
+      async function registerServiceWorker() {
+        try {
+          const reg = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          console.log("Service Worker registered successfully");
+          return reg;
+        } catch (e) {
+          console.error("Failed to register service worker:", e);
+          throw e;
+        }
       }
 
       // --- SERVICE WORKER & ECMA STANDARD ---
@@ -2370,15 +2293,8 @@ self.onmessage = (event) => {
             return;
           }
           
-          // Check if we're in Replit iframe environment - service workers don't work with blob URLs there
-          const isReplitIframe = window.self !== window.top;
-          if (isReplitIframe) {
-            console.log("Running in iframe environment - skipping Service Worker for ECMA (not fully supported)");
-            return;
-          }
-          
-          console.log("Registering inline Service Worker...");
-          const reg = await registerInlineServiceWorker();
+          console.log("Registering Service Worker for PDF download...");
+          const reg = await registerServiceWorker();
           
           // Wait for active controller or registration update
           let controller = reg.active || reg.controller;
@@ -2401,7 +2317,7 @@ self.onmessage = (event) => {
             startEcmaExtraction();
           }
         } catch (e) {
-          console.log("ECMA autoload: " + (e?.message || "Service Worker not available in this environment"));
+          console.warn("ECMA autoload error:", e?.message || "Service Worker registration failed");
         }
       }
 
