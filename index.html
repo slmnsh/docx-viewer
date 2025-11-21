@@ -2370,6 +2370,19 @@
           const indicator = document.getElementById("ecmaLoadingIndicator");
           const statusText = document.getElementById("ecmaStatusText");
           
+          // Wait for PDF.js to be available
+          let retries = 0;
+          while (typeof pdfjsLib === 'undefined' && retries < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+          }
+          
+          if (typeof pdfjsLib === 'undefined') {
+            console.error("PDF.js not loaded after waiting");
+            if (statusText) statusText.textContent = "❌ PDF.js failed to load";
+            return;
+          }
+          
           // Open IndexedDB and get the PDF binary
           const db = await new Promise((resolve, reject) => {
             const req = indexedDB.open("DocxViewerECMA", 1);
@@ -2386,12 +2399,7 @@
           
           if (!pdfBinary) {
             console.error("PDF binary not found in cache");
-            return;
-          }
-          
-          // Extract text using main thread's PDF.js
-          if (!pdfjsLib) {
-            console.error("PDF.js not loaded");
+            if (statusText) statusText.textContent = "❌ PDF data not found";
             return;
           }
           
