@@ -19,8 +19,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Showdown (Markdown) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <!-- Puter.js for free powerful AI (GPT-4, Claude, Gemini) -->
-    <script src="https://js.puter.com/v2/"></script>
+    <!-- No external AI required - local analysis only -->
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -965,28 +964,95 @@
         window.monacoXmlFoldingRegistered = true;
       }
 
-      // --- PUTER.JS POWERFUL AI INTEGRATION ---
+      // --- LOCAL OPENXML SCHEMA ANALYSIS ---
+      const openxmlSchemaMap = {
+        "p:p": "Paragraph element - Contains paragraph-level content",
+        "p:r": "Run element - Contains text runs with formatting",
+        "p:t": "Text element - Actual text content",
+        "w:p": "Word paragraph - Main paragraph container",
+        "w:r": "Word run - Text with consistent formatting",
+        "w:t": "Word text - Text content in Word format",
+        "w:rPr": "Run properties - Formatting for text run",
+        "w:pPr": "Paragraph properties - Formatting for paragraph",
+        "w:b": "Bold - Bold formatting",
+        "w:i": "Italic - Italic formatting",
+        "w:u": "Underline - Underline formatting",
+        "w:color": "Color attribute - Text color",
+        "w:sz": "Size attribute - Font size",
+        "w:rFonts": "Font name - Font family selection",
+        "w:body": "Body element - Document body container",
+        "w:document": "Document root - Root element of document",
+        "w:tbl": "Table - Table container",
+        "w:tr": "Table row - Row in table",
+        "w:tc": "Table cell - Cell in table",
+        "w:picture": "Picture/Image - Image element",
+        "wp:inline": "Inline image - Image in text",
+        "wp:anchor": "Anchored image - Positioned image",
+        "r:embed": "Relationship embed - Reference to embedded file",
+        "rel:id": "Relationship ID - Link to document part",
+        "a:p": "DrawingML paragraph - Paragraph in shapes",
+        "a:r": "DrawingML run - Run in shapes",
+        "a:t": "DrawingML text - Text in shapes"
+      };
+
       async function initializeAI() {
-        // Puter.js initializes automatically
-        console.log("Puter.js AI integration loaded");
+        console.log("Local OpenXML analysis initialized");
       }
 
-      async function analyzeXMLWithPuter(xmlSnippet) {
-        try {
-          const systemPrompt = `You are a specialized Open XML (DOCX) and ECMA-376 schema expert. Provide a comprehensive, structured analysis of the provided XML snippet. For each unique element (tag) and attribute in the snippet, explain its purpose and its role within the DOCX document structure according to ECMA-376 standards. Use Markdown format: start with a summary, then provide '#### Elements (Tags)' and '#### Attributes' sections with detailed explanations. Be technical but clear.`;
+      async function analyzeXMLWithOpenXMLMap(xmlSnippet) {
+        const elements = {};
+        const attributes = {};
+        const details = [];
+        
+        // Extract tags and attributes
+        const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
+        let match;
+        while ((match = tagRegex.exec(xmlSnippet)) !== null) {
+          const tagName = match[1];
+          const tagAttrs = match[2];
           
-          const userQuery = `Analyze this DOCX Open XML snippet according to ECMA-376 standards:\n\n\`\`\`xml\n${xmlSnippet}\n\`\`\`\n\nProvide detailed explanations of all elements and attributes.`;
+          if (!elements[tagName]) elements[tagName] = 0;
+          elements[tagName]++;
           
-          const response = await puter.ai.chat(userQuery, {
-            model: "gpt-4o",
-            system: systemPrompt
-          });
-          
-          return response || "No analysis available";
-        } catch (error) {
-          console.error("Puter.js analysis error:", error);
-          throw error;
+          // Extract attributes from this tag
+          const attrRegex = /([a-zA-Z:_-]+)="([^"]*)"/g;
+          let attrMatch;
+          while ((attrMatch = attrRegex.exec(tagAttrs)) !== null) {
+            const attrName = attrMatch[1];
+            if (!attributes[attrName]) attributes[attrName] = 0;
+            attributes[attrName]++;
+          }
         }
+        
+        // Generate analysis
+        let analysis = `## DOCX OpenXML Structure Analysis\n\n`;
+        analysis += `**Summary:** This XML snippet contains **${Object.keys(elements).length}** unique elements and **${Object.keys(attributes).length}** unique attributes.\n\n`;
+        
+        analysis += `#### Elements (Tags)\n\n`;
+        Object.entries(elements).forEach(([tag, count]) => {
+          const description = openxmlSchemaMap[tag] || "Part of DOCX Open XML structure (ECMA-376)";
+          analysis += `- **\`${tag}\`** (appears ${count}x): ${description}\n`;
+        });
+        
+        analysis += `\n#### Attributes\n\n`;
+        Object.entries(attributes).forEach(([attr, count]) => {
+          let description = "Attribute within DOCX elements";
+          if (attr.includes("val")) description = "Value attribute - specifies element value";
+          else if (attr.includes("id")) description = "Identifier - unique reference";
+          else if (attr.includes("type")) description = "Type specifier - defines element type";
+          else if (attr.includes("name")) description = "Name attribute - element name";
+          analysis += `- **\`${attr}\`** (appears ${count}x): ${description}\n`;
+        });
+        
+        analysis += `\n#### OpenXML Notes\n\n`;
+        analysis += `- This snippet follows the **ECMA-376** standard for Office Open XML\n`;
+        analysis += `- Namespace prefixes (w:, p:, a:, etc.) indicate different schema parts\n`;
+        analysis += `- **w:** = WordprocessingML (core Word formatting)\n`;
+        analysis += `- **p:** = PresentationML (PowerPoint)\n`;
+        analysis += `- **a:** = DrawingML (shapes and graphics)\n`;
+        analysis += `- **r:** = Relationships (links between parts)\n`;
+        
+        return analysis;
       }
 
       function showAnalysis(markdown) {
@@ -1305,12 +1371,12 @@
           els.loading.style.display = "flex";
 
           try {
-            const result = await analyzeXMLWithPuter(selectedText);
+            const result = await analyzeXMLWithOpenXMLMap(selectedText);
             showAnalysis(result);
           } catch (e) {
             console.error("XML analysis failed:", e);
             showAnalysis(
-              "**Error:** Failed to analyze XML. Make sure Puter.js is loaded. Check the console for details.",
+              "**Error:** Failed to analyze XML. Please check the console for details.",
             );
           } finally {
             els.loading.style.display = "none";
