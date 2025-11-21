@@ -2324,8 +2324,6 @@
           indicator.classList.remove("hidden");
           console.log("✓ ECMA indicator visible");
         }
-        console.log("Starting ECMA extraction in background...");
-        navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
         
         const messageHandler = (event) => {
           const { type, content, pages, size, current, total, percent, message } = event.data;
@@ -2333,7 +2331,6 @@
           
           if (type === "download_start") {
             if (statusText) statusText.textContent = "Loading DOCX Context...";
-            console.log("Downloading ECMA-376 PDF...");
           } else if (type === "download_progress") {
             if (statusText) statusText.textContent = `Loading DOCX Context ${percent}%`;
           } else if (type === "download_complete") {
@@ -2365,7 +2362,10 @@
           }
         };
         
+        // ADD LISTENER FIRST, THEN SEND MESSAGE
         navigator.serviceWorker.addEventListener("message", messageHandler);
+        console.log("Starting ECMA extraction in background...");
+        navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
       }
 
       // --- INIT ---
