@@ -27,13 +27,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <!-- Transformers.js for local AI -->
     <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@3/dist/transformers.min.js"></script>
-    <!-- PDF.js for ECMA-376 Standard extraction -->
-    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js"></script>
-    <script>
-      if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
-      }
-    </script>
+    <!-- PDF.js now loaded in service worker via importScripts -->
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -2321,94 +2315,6 @@
         }
       }
 
-      async function extractPdfFromCache() {
-        const indicator = document.getElementById("ecmaLoadingIndicator");
-        const statusText = document.getElementById("ecmaStatusText");
-        
-        try {
-          if (statusText) statusText.textContent = "Extracting text...";
-          
-          // Wait for PDF.js to load
-          let retries = 0;
-          while (typeof pdfjsLib === 'undefined' && retries < 100) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-            retries++;
-          }
-          
-          if (typeof pdfjsLib === 'undefined') {
-            throw new Error("PDF.js library not loaded");
-          }
-          
-          // Ensure worker path is set
-          if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
-          }
-          
-          // Get PDF binary from IndexedDB
-          const db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open("DocxViewerECMA", 1);
-            req.onerror = () => reject(req.error);
-            req.onsuccess = () => resolve(req.result);
-          });
-          
-          const pdfBinary = await new Promise((resolve) => {
-            const tx = db.transaction("pdf_binary", "readonly");
-            const req = tx.objectStore("pdf_binary").get("pdf");
-            req.onsuccess = () => resolve(req.result?.data);
-            req.onerror = () => resolve(null);
-          });
-          
-          if (!pdfBinary) {
-            throw new Error("PDF binary not found");
-          }
-          
-          console.log("Loading PDF with PDF.js...");
-          // Extract text using PDF.js
-          const pdf = await pdfjsLib.getDocument({ data: pdfBinary }).promise;
-          const totalPages = pdf.numPages;
-          console.log(`PDF loaded: ${totalPages} pages`);
-          
-          let extractedText = "";
-          let extractedCount = 0;
-
-          for (let i = 1; i <= totalPages; i++) {
-            try {
-              const page = await pdf.getPage(i);
-              const content = await page.getTextContent();
-              const pageText = content.items.map(item => item.str).join(" ");
-              extractedText += pageText + "\n";
-              extractedCount++;
-
-              if (i % Math.max(1, Math.floor(totalPages / 10)) === 0) {
-                const pct = Math.round((i / totalPages) * 100);
-                if (statusText) statusText.textContent = `Extracting text ${pct}%`;
-                console.log(`Extracted ${i}/${totalPages} pages`);
-              }
-            } catch (e) {
-              console.warn(`Page ${i} extraction failed:`, e.message);
-            }
-          }
-
-          ecmaStandardContent = extractedText;
-          localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-          console.log(`✓ ECMA-376: ${extractedCount} pages, ${(extractedText.length/1024/1024).toFixed(1)}MB ready`);
-          
-          if (indicator && statusText) {
-            statusText.textContent = "✓ DOCX Context Ready";
-            const spinner = indicator.querySelector(".ecma-spinner");
-            if (spinner) {
-              spinner.classList.add("done");
-              spinner.textContent = "✓";
-            }
-            setTimeout(() => indicator.classList.add("hidden"), 2000);
-          }
-        } catch (error) {
-          console.error("PDF extraction error:", error.message || error);
-          console.error("Stack:", error.stack);
-          if (statusText) statusText.textContent = "❌ Extraction failed: " + (error.message || "Unknown error");
-        }
-      }
-
       function startEcmaExtraction() {
         if (!navigator.serviceWorker.controller) {
           console.warn("No active Service Worker controller");
@@ -2425,7 +2331,7 @@
         
         // Listen for messages from the service worker
         const messageHandler = async (event) => {
-          const { type, size, percent, message } = event.data;
+          const { type, size, percent, message, text, pages } = event.data;
           console.log("[SW Message]", type, percent || "");
           
           if (type === "download_start") {
@@ -2433,13 +2339,33 @@
           } else if (type === "download_progress") {
             if (statusText) statusText.textContent = `Loading PDF ${percent}%`;
           } else if (type === "download_complete") {
+            if (statusText) statusText.textContent = "Extracting text...";
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
+            // Start extraction in service worker
+            navigator.serviceWorker.controller.postMessage({ command: "extractPDF" });
+          } else if (type === "extraction_start") {
+            if (statusText) statusText.textContent = "Extracting text...";
+          } else if (type === "extraction_progress") {
+            if (statusText) statusText.textContent = `Extracting text ${percent}%`;
+          } else if (type === "extraction_complete") {
+            console.log(`✓ PDF extracted: ${pages} pages`);
+            ecmaStandardContent = text;
+            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+            console.log(`✓ ECMA-376: ${pages} pages, ${(text.length/1024/1024).toFixed(1)}MB ready`);
+            
+            if (indicator && statusText) {
+              statusText.textContent = "✓ DOCX Context Ready";
+              const spinner = indicator.querySelector(".ecma-spinner");
+              if (spinner) {
+                spinner.classList.add("done");
+                spinner.textContent = "✓";
+              }
+              setTimeout(() => indicator.classList.add("hidden"), 2000);
+            }
             navigator.serviceWorker.removeEventListener("message", messageHandler);
-            // Extract on main thread
-            await extractPdfFromCache();
-          } else if (type === "error") {
+          } else if (type === "error" || type === "extraction_error") {
             console.error("Service Worker error:", message);
-            if (statusText) statusText.textContent = "❌ Download failed";
+            if (statusText) statusText.textContent = "❌ Load failed";
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };

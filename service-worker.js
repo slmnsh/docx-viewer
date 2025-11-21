@@ -88,7 +88,7 @@ async function extractPDF() {
     });
     
     // Set up PDF.js worker
-   if (typeof pdfjsLib !== 'undefined') {
+    if (typeof pdfjsLib !== 'undefined') {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
     }
     
