@@ -1226,7 +1226,7 @@
           if (this.editor || !window.monaco) return;
           this.editor = monaco.editor.create(this.editorContainer, {
             value: "",
-            language: "xml",
+            language: "plaintext",
             theme: "docx-internals",
             automaticLayout: true,
             readOnly: true,
@@ -1235,6 +1235,8 @@
             fontSize: 14,
             fontLigatures: true,
             lineHeight: 1.6,
+            glyphMargin: false,
+            folding: false,
           });
           this.editor.onDidFocusEditorText(() =>
             splitManager.setActive(this.id),
