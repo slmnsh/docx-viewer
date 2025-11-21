@@ -151,6 +151,13 @@
         color: #6b7dff;
         margin-right: 12px;
         animation: fadeIn 0.3s ease;
+        max-width: 240px;
+      }
+      #ecmaStatusText {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
       }
       #ecmaLoadingIndicator.hidden {
         display: none;
@@ -786,9 +793,9 @@
           <h1 class="font-bold text-lg text-[var(--text-main)]">
             DOCX Internals Viewer
           </h1>
-          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-6 px-3 py-1.5 bg-[rgba(107,125,255,0.15)] border border-[rgba(107,125,255,0.4)] rounded-lg text-xs font-medium text-[#6b7dff] whitespace-nowrap">
+          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-6 px-3 py-1.5 bg-[rgba(107,125,255,0.15)] border border-[rgba(107,125,255,0.4)] rounded-lg text-xs font-medium text-[#6b7dff]">
             <span class="ecma-spinner inline-block w-2.5 h-2.5 border-2 border-[rgba(107,125,255,0.3)] border-t-[#6b7dff] rounded-full animate-spin flex-shrink-0"></span>
-            <span id="ecmaStatusText">Loading ECMA-376...</span>
+            <span id="ecmaStatusText">Loading...</span>
           </div>
         </div>
         <div class="flex items-center gap-4">
@@ -1115,6 +1122,14 @@
     </div>
 
     <script>
+      // Global error handler for non-Error throws
+      window.addEventListener("error", (event) => {
+        if (!(event.error instanceof Error)) {
+          console.warn("Non-error exception caught:", event.error);
+          event.preventDefault();
+        }
+      });
+      
       // --- GLOBAL STATE ---
       const els = {
         mainSidebar: document.getElementById("mainSidebar"),
@@ -2317,24 +2332,24 @@
           console.log("[SW Message]", type, percent || "", message || "");
           
           if (type === "download_start") {
-            if (statusText) statusText.textContent = "📥 Downloading PDF...";
+            if (statusText) statusText.textContent = "📥 Downloading...";
             console.log("Downloading ECMA-376 PDF...");
           } else if (type === "download_progress") {
-            if (statusText) statusText.textContent = `📥 Downloading ${percent}%...`;
+            if (statusText) statusText.textContent = `📥 ${percent}%`;
           } else if (type === "download_complete") {
-            if (statusText) statusText.textContent = `📥 Downloaded ${(size/1024/1024).toFixed(1)}MB`;
+            if (statusText) statusText.textContent = `📥 ${(size/1024/1024).toFixed(1)}MB`;
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
           } else if (type === "extraction_start") {
             if (statusText) statusText.textContent = "⚙️ Extracting...";
           } else if (type === "extraction_progress") {
-            if (statusText) statusText.textContent = `⚙️ Extracting ${percent}% (${current}/${total})`;
+            if (statusText) statusText.textContent = `⚙️ ${percent}%`;
             console.log(`  Extraction: ${current}/${total} (${percent}%)`);
           } else if (type === "complete") {
             ecmaStandardContent = content;
             localStorage.setItem("ecma_standard_content", ecmaStandardContent);
             console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB ready`);
             if (indicator && statusText) {
-              statusText.textContent = "✓ ECMA-376 Ready";
+              statusText.textContent = "✓ Ready";
               const spinner = indicator.querySelector(".ecma-spinner");
               if (spinner) {
                 spinner.classList.add("done");
@@ -2438,25 +2453,33 @@
       els.uploadBtn.onclick = () => hiddenInput.click();
       els.landingUploadBtn.onclick = () => hiddenInput.click(); // Connect landing button
 
-      (async function bootstrap() {
-        // Show header immediately to display ECMA loading indicator
-        els.header.classList.remove("hidden");
-        
-        splitManager.init(els.editorWrapper);
-        await loadMonaco();
-        await initializeAI();
-        
-        // Start ECMA loading in background (non-blocking)
-        autoLoadEcmaStandard();
+      try {
+        (async function bootstrap() {
+          try {
+            // Show header immediately to display ECMA loading indicator
+            els.header.classList.remove("hidden");
+            
+            splitManager.init(els.editorWrapper);
+            await loadMonaco();
+            await initializeAI();
+            
+            // Start ECMA loading in background (non-blocking)
+            autoLoadEcmaStandard();
 
-        splitManager.panes.forEach((p) => {
-          if (!p.editor && p.editorContainer.style.display !== "none") {
-            p.initEditor();
-            if (p.activeTabPath) p.setActiveTab(p.activeTabPath);
+            splitManager.panes.forEach((p) => {
+              if (!p.editor && p.editorContainer.style.display !== "none") {
+                p.initEditor();
+                if (p.activeTabPath) p.setActiveTab(p.activeTabPath);
+              }
+            });
+            await renderRecents();
+          } catch (bootstrapError) {
+            console.error("Bootstrap error:", bootstrapError);
           }
-        });
-        await renderRecents();
-      })();
+        })();
+      } catch (error) {
+        console.error("Initialization error:", error);
+      }
     </script>
   </body>
 </html>
