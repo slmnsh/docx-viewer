@@ -2215,52 +2215,24 @@
             return;
           }
           
-          console.log("Fetching ECMA-376 Standard...");
+          console.log("Loading ECMA-376 Standard from local server...");
           
-          // Try to fetch from server-cached version first
-          try {
-            const response = await fetch("/ecma-standard.json", { cache: "no-store" });
-            if (response.ok) {
-              const data = await response.json();
-              ecmaStandardContent = data.content;
-              localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-              console.log("✓ ECMA standard loaded from server (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
-              return;
-            }
-          } catch (e) {
-            console.log("Server cache not ready yet, trying direct download...");
-          }
-          
-          // Fallback: direct download with smaller chunks and retry
-          const zipUrl = "https://ecma-international.org/wp-content/uploads/ECMA-376-1_5th_edition_december_2016.zip";
-          
-          const response = await fetch(zipUrl, { 
-            mode: 'cors',
-            cache: 'default',
-            signal: AbortSignal.timeout(60000) // 60 second timeout
-          });
-          
+          // Fetch local PDF
+          const response = await fetch("/ecma-standard.pdf");
           if (!response.ok) {
-            console.warn("ECMA download status:", response.status);
+            console.warn("Local PDF not available");
             return;
           }
           
-          const zipData = await response.arrayBuffer();
-          console.log("✓ ZIP downloaded (" + (zipData.byteLength/1024/1024).toFixed(0) + "MB), extracting...");
+          const pdfData = await response.arrayBuffer();
+          console.log("✓ PDF loaded (" + (pdfData.byteLength/1024/1024).toFixed(0) + "MB), extracting text...");
           
-          const zip = await JSZip.loadAsync(zipData);
-          const pdfFile = Object.keys(zip.files).find(f => f.includes("Fundamentals"));
-          
-          if (pdfFile) {
-            const pdfData = await zip.files[pdfFile].async("arraybuffer");
-            console.log("✓ Extracting PDF text...");
-            ecmaStandardContent = await extractPdfText(pdfData);
-            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-            localStorage.setItem("ecma_standard_name", pdfFile.split("/").pop());
-            console.log("✓ ECMA-376 Standard loaded (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
-          }
+          ecmaStandardContent = await extractPdfText(pdfData);
+          localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+          localStorage.setItem("ecma_standard_name", "ECMA-376-1_5th_edition");
+          console.log("✓ ECMA-376 Standard loaded and cached (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
         } catch (e) {
-          console.warn("ECMA standard auto-load skipped:", e?.message || "Unknown error");
+          console.warn("ECMA standard load skipped:", e?.message || "Unknown error");
         }
       }
 
