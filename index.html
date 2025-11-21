@@ -3,10 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%2300aaff'>D</text></svg>" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%2300aaff'>D</text></svg>"
+    />
     <title>DOCX Internals Viewer</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -459,7 +465,7 @@
         background: rgba(107, 125, 255, 0.15);
         padding: 2px 6px;
         border-radius: 4px;
-        font-family: 'Fira Code', 'SF Mono', Monaco, monospace;
+        font-family: "Fira Code", "SF Mono", Monaco, monospace;
         font-size: 13px;
         color: #9da3ff;
         border: 1px solid rgba(107, 125, 255, 0.2);
@@ -512,7 +518,11 @@
 
       /* Landing Page Recent Card - Enhanced */
       .landing-recent-card {
-        background: linear-gradient(135deg, rgba(34, 33, 56, 0.8) 0%, rgba(46, 45, 77, 0.6) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(34, 33, 56, 0.8) 0%,
+          rgba(46, 45, 77, 0.6) 100%
+        );
         border: 1.5px solid rgba(0, 170, 255, 0.3);
         padding: 16px 18px;
         border-radius: 12px;
@@ -521,28 +531,40 @@
         display: flex;
         align-items: center;
         gap: 14px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        box-shadow:
+          0 4px 15px rgba(0, 0, 0, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(10px);
         position: relative;
         overflow: hidden;
       }
       .landing-recent-card::before {
-        content: '';
+        content: "";
         position: absolute;
         top: -50%;
         right: -50%;
         width: 100px;
         height: 100px;
-        background: radial-gradient(circle, rgba(0, 170, 255, 0.1) 0%, transparent 70%);
+        background: radial-gradient(
+          circle,
+          rgba(0, 170, 255, 0.1) 0%,
+          transparent 70%
+        );
         border-radius: 50%;
         transition: all 0.3s ease;
         pointer-events: none;
       }
       .landing-recent-card:hover {
-        background: linear-gradient(135deg, rgba(34, 33, 56, 1) 0%, rgba(46, 45, 77, 0.9) 100%);
+        background: linear-gradient(
+          135deg,
+          rgba(34, 33, 56, 1) 0%,
+          rgba(46, 45, 77, 0.9) 100%
+        );
         border-color: rgba(0, 170, 255, 0.6);
         transform: translateY(-4px);
-        box-shadow: 0 12px 30px rgba(0, 170, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        box-shadow:
+          0 12px 30px rgba(0, 170, 255, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
       }
       .landing-recent-card:hover::before {
         width: 150px;
@@ -555,7 +577,12 @@
 
       /* Welcome section container */
       #welcomeSection {
-        background: linear-gradient(135deg, #181825 0%, #1a1a2e 50%, #181825 100%);
+        background: linear-gradient(
+          135deg,
+          #181825 0%,
+          #1a1a2e 50%,
+          #181825 100%
+        );
       }
 
       /* Hero icon */
@@ -764,10 +791,7 @@
           class="flex-1 bg-[var(--bg-dark)] relative flex overflow-hidden"
         >
           <!-- Landing Page / Welcome Section -->
-          <div
-            id="welcomeSection"
-            class="w-full bg-[var(--bg-dark)] z-20"
-          >
+          <div id="welcomeSection" class="w-full bg-[var(--bg-dark)] z-20">
             <div class="max-w-3xl w-full px-6 py-10 flex flex-col items-center">
               <!-- Hero -->
               <div
@@ -777,15 +801,16 @@
                   >description</span
                 >
               </div>
-              <h1
-                class="text-5xl font-black text-white mb-6 text-center"
-              >
+              <h1 class="text-5xl font-black text-white mb-6 text-center">
                 DOCX Internals Viewer
               </h1>
               <p
                 class="text-[#d0d0e0] text-center mb-6 max-w-2xl text-lg leading-relaxed font-medium"
               >
-                A forensic tool for exploring the <strong>Open XML</strong> structure of Word documents. Inspect XML, view assets, and analyze the file hierarchy entirely in your browser.
+                A forensic tool for exploring the
+                <strong>Open XML</strong> structure of Word documents. Inspect
+                XML, view assets, and analyze the file hierarchy entirely in
+                your browser.
               </p>
 
               <!-- Main Action -->
@@ -844,7 +869,8 @@
                     AI-Powered Analysis
                   </h4>
                   <p class="text-sm text-gray-500 mt-1">
-                    OpenAI, Gemini, Anthropic, or free local AI. Choose your analyzer.
+                    OpenAI, Gemini, Anthropic, or free local AI. Choose your
+                    analyzer.
                   </p>
                 </div>
                 <div>
@@ -874,18 +900,39 @@
 
     <!-- LLM Analysis Box -->
     <div id="geminiAnalysisBox" class="hidden">
-      <h3 style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-          <span class="material-icons" style="color: white; font-size: 32px;">description</span>
-          <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 12px; color: #ccc; font-weight: normal;">XML Analysis</span>
-            <span id="analysisModelName" style="color: white; font-weight: bold; font-size: 14px;">Local XML Parser</span>
+      <h3
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+        "
+      >
+        <div style="display: flex; align-items: center; gap: 12px; flex: 1">
+          <span class="material-icons" style="color: white; font-size: 32px"
+            >description</span
+          >
+          <div style="display: flex; flex-direction: column">
+            <span style="font-size: 12px; color: #ccc; font-weight: normal"
+              >XML Analysis</span
+            >
+            <span
+              id="analysisModelName"
+              style="color: white; font-weight: bold; font-size: 14px"
+              >Local XML Parser</span
+            >
           </div>
         </div>
         <button
           id="closeAnalysisBtn"
           class="material-icons"
-          style="color: white; font-size: 24px; background: none; border: none; cursor: pointer;"
+          style="
+            color: white;
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+          "
         >
           close
         </button>
@@ -907,38 +954,111 @@
     </div>
 
     <!-- API Settings Modal -->
-    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center p-4">
-      <div class="bg-[var(--bg-sidebar)] rounded-lg border border-[var(--border)] max-w-lg w-full max-h-96 overflow-y-auto shadow-2xl">
-        <div class="p-6 border-b border-[var(--border)] flex items-center justify-between sticky top-0 bg-[var(--bg-sidebar)]">
+    <div
+      id="settingsModal"
+      class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-[var(--bg-sidebar)] rounded-lg border border-[var(--border)] max-w-lg w-full max-h-96 overflow-y-auto shadow-2xl"
+      >
+        <div
+          class="p-6 border-b border-[var(--border)] flex items-center justify-between sticky top-0 bg-[var(--bg-sidebar)]"
+        >
           <h2 class="text-xl font-bold text-white flex items-center gap-2">
-            <span class="material-icons">psychology_alt</span> AI Provider Settings
+            <span class="material-icons">psychology_alt</span> AI Provider
+            Settings
           </h2>
-          <button id="closeSettings" class="text-gray-400 hover:text-white text-2xl">×</button>
+          <button
+            id="closeSettings"
+            class="text-gray-400 hover:text-white text-2xl"
+          >
+            ×
+          </button>
         </div>
         <div class="p-6 space-y-4">
-          <p class="text-gray-400 text-sm">Optionally add your LLM API keys for enhanced XML analysis. Keys stay in your browser.</p>
-          
+          <p class="text-gray-400 text-sm">
+            Optionally add your LLM API keys for enhanced XML analysis. Keys
+            stay in your browser.
+          </p>
+
           <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-300">OpenAI API Key</label>
-            <input id="openaiKey" type="password" placeholder="sk-..." class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"/>
-            <p class="text-xs text-gray-500">Get free credits: <a href="https://platform.openai.com/account/api-keys" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">openai.com/account/api-keys</a></p>
+            <label class="block text-sm font-medium text-gray-300"
+              >OpenAI API Key</label
+            >
+            <input
+              id="openaiKey"
+              type="password"
+              placeholder="sk-..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              Get free credits:
+              <a
+                href="https://platform.openai.com/account/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >openai.com/account/api-keys</a
+              >
+            </p>
           </div>
 
           <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-300">Google Gemini API Key</label>
-            <input id="geminiKey" type="password" placeholder="AIza..." class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"/>
-            <p class="text-xs text-gray-500">Free tier: <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">ai.google.dev</a></p>
+            <label class="block text-sm font-medium text-gray-300"
+              >Google Gemini API Key</label
+            >
+            <input
+              id="geminiKey"
+              type="password"
+              placeholder="AIza..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              Free tier:
+              <a
+                href="https://aistudio.google.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >https://aistudio.google.com/api-keys</a
+              >
+            </p>
           </div>
 
           <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-300">Anthropic Claude API Key</label>
-            <input id="anthropicKey" type="password" placeholder="sk-ant-..." class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"/>
-            <p class="text-xs text-gray-500"><a href="https://www.anthropic.com/api" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">anthropic.com/api</a></p>
+            <label class="block text-sm font-medium text-gray-300"
+              >Anthropic Claude API Key</label
+            >
+            <input
+              id="anthropicKey"
+              type="password"
+              placeholder="sk-ant-..."
+              class="w-full bg-[#2a2a3a] text-white px-3 py-2 rounded border border-[var(--border)] focus:border-[var(--accent)] outline-none transition text-sm"
+            />
+            <p class="text-xs text-gray-500">
+              <a
+                href="https://www.anthropic.com/api"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-[var(--accent)] hover:underline"
+                >anthropic.com/api</a
+              >
+            </p>
           </div>
 
           <div class="flex gap-2 pt-4">
-            <button id="saveLlmKeys" class="flex-1 bg-[var(--accent)] hover:bg-[#5a6dd6] text-white px-4 py-2 rounded font-medium transition">Save Keys</button>
-            <button id="clearLlmKeys" class="flex-1 bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded font-medium transition">Clear All</button>
+            <button
+              id="saveLlmKeys"
+              class="flex-1 bg-[var(--accent)] hover:bg-[#5a6dd6] text-white px-4 py-2 rounded font-medium transition"
+            >
+              Save Keys
+            </button>
+            <button
+              id="clearLlmKeys"
+              class="flex-1 bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded font-medium transition"
+            >
+              Clear All
+            </button>
           </div>
         </div>
       </div>
@@ -1011,7 +1131,7 @@
       // --- MONACO HELPERS ---
       function registerGlobalMonacoFeatures() {
         if (!window.monaco || window.monacoXmlFoldingRegistered) return;
-        
+
         // Register custom theme matching UI colors
         monaco.editor.defineTheme("docx-internals", {
           base: "vs-dark",
@@ -1041,7 +1161,7 @@
             "editorBracketMatch.border": "#7fa0d0",
           },
         });
-        
+
         monaco.languages.registerFoldingRangeProvider("xml", {
           provideFoldingRanges: function (model) {
             const ranges = [];
@@ -1073,7 +1193,7 @@
       let llmSettings = {
         openai: localStorage.getItem("llm_openai_key") || "",
         gemini: localStorage.getItem("llm_gemini_key") || "",
-        anthropic: localStorage.getItem("llm_anthropic_key") || ""
+        anthropic: localStorage.getItem("llm_anthropic_key") || "",
       };
 
       // --- TRANSFORMERS.JS LOCAL AI INTEGRATION ---
@@ -1082,13 +1202,16 @@
       async function initializeAI() {
         try {
           // Transformers.js is optional - app works with or without it
-          if (typeof window.TransformersAPI !== 'undefined') {
+          if (typeof window.TransformersAPI !== "undefined") {
             console.log("Transformers.js AI available");
           } else {
             console.log("Transformers.js not available, using local analysis");
           }
         } catch (error) {
-          console.warn("AI initialization notice:", error?.message || "Transformers not available");
+          console.warn(
+            "AI initialization notice:",
+            error?.message || "Transformers not available",
+          );
         }
       }
 
@@ -1097,18 +1220,27 @@
         if (!apiKey) return null;
         try {
           const systemPrompt = `You are an ECMA-376 XML specification expert. Analyze the DOCX Open XML. For each element and attribute found, document: 1) Element name and what it does (per ECMA-376), 2) Attributes on that element, what each attribute does, and their possible values/ranges. Use clean markdown with sections and lists. Be technical and concise. IMPORTANT: Do NOT wrap content in code fences. Output plain markdown only.`;
-          const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\`` }
-              ],
-              max_tokens: 1500
-            })
-          });
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  {
+                    role: "user",
+                    content: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\``,
+                  },
+                ],
+                max_tokens: 1500,
+              }),
+            },
+          );
           const data = await response.json();
           const content = data.choices?.[0]?.message?.content;
           return content ? { content, model: "OpenAI GPT-4o Mini" } : null;
@@ -1123,14 +1255,25 @@
         if (!apiKey) return null;
         try {
           const systemPrompt = `You are an ECMA-376 XML specification expert. Analyze the DOCX Open XML. For each element and attribute found, document: 1) Element name and what it does (per ECMA-376), 2) Attributes on that element, what each attribute does, and their possible values/ranges. Use clean markdown with sections and lists. Be technical and concise. IMPORTANT: Do NOT wrap content in code fences. Output plain markdown only.`;
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ parts: [{ text: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\`` }] }] 
-            })
-          });
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [
+                  {
+                    parts: [
+                      {
+                        text: `Analyze and document this DOCX XML as API reference with element purposes and attribute details:\n\`\`\`xml\n${xmlSnippet}\n\`\`\``,
+                      },
+                    ],
+                  },
+                ],
+              }),
+            },
+          );
           const data = await response.json();
           const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
           return content ? { content, model: "Google Gemini 2.0 Flash" } : null;
@@ -1143,26 +1286,26 @@
       async function analyzeWithXMLTransformers(xmlSnippet) {
         // Parse XML to extract elements, attributes, and their values
         const elementMap = {}; // tagName -> {count, attributes: {attrName -> [values]}}
-        
+
         // Extract tags and their attributes
         const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
         let match;
         while ((match = tagRegex.exec(xmlSnippet)) !== null) {
           const tagName = match[1];
           const tagAttrs = match[2];
-          
+
           if (!elementMap[tagName]) {
             elementMap[tagName] = { count: 0, attributes: {} };
           }
           elementMap[tagName].count++;
-          
+
           // Extract attributes and their values from this tag
           const attrRegex = /([a-zA-Z:_-]+)="([^"]*)"/g;
           let attrMatch;
           while ((attrMatch = attrRegex.exec(tagAttrs)) !== null) {
             const attrName = attrMatch[1];
             const attrValue = attrMatch[2];
-            
+
             if (!elementMap[tagName].attributes[attrName]) {
               elementMap[tagName].attributes[attrName] = [];
             }
@@ -1171,34 +1314,37 @@
             }
           }
         }
-        
+
         // Generate detailed API reference style analysis
         let analysis = `**Elements Found:** ${Object.keys(elementMap).length}\n\n`;
-        
+
         analysis += `## Elements and Attributes\n\n`;
         Object.entries(elementMap).forEach(([tagName, data]) => {
           analysis += `### ${tagName}\n`;
           analysis += `- **Occurrences:** ${data.count}x\n`;
           analysis += `- **Purpose:** ECMA-376 Part 1 element\n`;
-          
+
           if (Object.keys(data.attributes).length > 0) {
             analysis += `- **Attributes:**\n`;
             Object.entries(data.attributes).forEach(([attrName, values]) => {
               analysis += `  - **${attrName}**: ECMA-376 property\n`;
               if (values.length <= 5) {
-                analysis += `    - Values: ${values.map(v => `\`${v}\``).join(', ')}\n`;
+                analysis += `    - Values: ${values.map((v) => `\`${v}\``).join(", ")}\n`;
               } else {
-                analysis += `    - Sample values: ${values.slice(0, 3).map(v => `\`${v}\``).join(', ')} (+ ${values.length - 3} more)\n`;
+                analysis += `    - Sample values: ${values
+                  .slice(0, 3)
+                  .map((v) => `\`${v}\``)
+                  .join(", ")} (+ ${values.length - 3} more)\n`;
               }
             });
           }
           analysis += `\n`;
         });
-        
+
         analysis += `## Reference\n\n`;
         analysis += `- Standard: ECMA-376 Office Open XML\n`;
         analysis += `- Spec: https://www.ecma-international.org/publications-and-standards/standards/ecma-376/\n`;
-        
+
         return { content: analysis, model: "Local XML Parser" };
       }
 
@@ -1228,9 +1374,9 @@
           tables: true,
           tasklists: true,
           strikethrough: true,
-          ghCodeBlocks: true
-        })
-        els.geminiAnalysisContent.innerHTML = converter.makeHtml(markdown)
+          ghCodeBlocks: true,
+        });
+        els.geminiAnalysisContent.innerHTML = converter.makeHtml(markdown);
         els.geminiAnalysisBox.classList.remove("hidden");
         void els.geminiAnalysisBox.offsetWidth;
         els.geminiAnalysisBox.classList.add("visible");
@@ -1450,7 +1596,8 @@
             automaticLayout: true,
             readOnly: true,
             minimap: { enabled: false },
-            fontFamily: '"Fira Code", "SF Mono", Monaco, "Menlo", "Ubuntu Mono", monospace',
+            fontFamily:
+              '"Fira Code", "SF Mono", Monaco, "Menlo", "Ubuntu Mono", monospace',
             fontSize: 14,
             fontLigatures: true,
             lineHeight: 1.6,
@@ -2022,12 +2169,16 @@
         const closeSettings = document.getElementById("closeSettings");
         const saveLlmKeys = document.getElementById("saveLlmKeys");
         const clearLlmKeys = document.getElementById("clearLlmKeys");
-        
+
         if (settingsBtn) {
           settingsBtn.onclick = () => {
-            if (document.getElementById("openaiKey")) document.getElementById("openaiKey").value = llmSettings.openai;
-            if (document.getElementById("geminiKey")) document.getElementById("geminiKey").value = llmSettings.gemini;
-            if (document.getElementById("anthropicKey")) document.getElementById("anthropicKey").value = llmSettings.anthropic;
+            if (document.getElementById("openaiKey"))
+              document.getElementById("openaiKey").value = llmSettings.openai;
+            if (document.getElementById("geminiKey"))
+              document.getElementById("geminiKey").value = llmSettings.gemini;
+            if (document.getElementById("anthropicKey"))
+              document.getElementById("anthropicKey").value =
+                llmSettings.anthropic;
             settingsModal.classList.remove("hidden");
           };
         }
@@ -2036,19 +2187,28 @@
         }
         if (settingsModal) {
           settingsModal.onclick = (e) => {
-            if (e.target === settingsModal) settingsModal.classList.add("hidden");
+            if (e.target === settingsModal)
+              settingsModal.classList.add("hidden");
           };
         }
         if (saveLlmKeys) {
           saveLlmKeys.onclick = () => {
-            llmSettings.openai = (document.getElementById("openaiKey")?.value || "").trim();
-            llmSettings.gemini = (document.getElementById("geminiKey")?.value || "").trim();
-            llmSettings.anthropic = (document.getElementById("anthropicKey")?.value || "").trim();
+            llmSettings.openai = (
+              document.getElementById("openaiKey")?.value || ""
+            ).trim();
+            llmSettings.gemini = (
+              document.getElementById("geminiKey")?.value || ""
+            ).trim();
+            llmSettings.anthropic = (
+              document.getElementById("anthropicKey")?.value || ""
+            ).trim();
             localStorage.setItem("llm_openai_key", llmSettings.openai);
             localStorage.setItem("llm_gemini_key", llmSettings.gemini);
             localStorage.setItem("llm_anthropic_key", llmSettings.anthropic);
-            showAnalysis("✅ **API Keys Saved!** Your keys are stored locally in your browser and never sent to our servers.");
-            setTimeout(() => settingsModal.classList.add("hidden"), 1000);
+            showAnalysis(
+              "**API Keys Saved!** Your keys are stored locally in your browser and never sent to our servers.",
+            );
+            settingsModal.classList.add("hidden");
           };
         }
         if (clearLlmKeys) {
@@ -2057,8 +2217,10 @@
             localStorage.removeItem("llm_openai_key");
             localStorage.removeItem("llm_gemini_key");
             localStorage.removeItem("llm_anthropic_key");
-            showAnalysis("🗑️ **API Keys Cleared!** Analysis will use local processing.");
-            setTimeout(() => settingsModal.classList.add("hidden"), 1000);
+            showAnalysis(
+              "🗑️ **API Keys Cleared!** Analysis will use local processing.",
+            );
+            settingsModal.classList.add("hidden");
           };
         }
       } catch (e) {
