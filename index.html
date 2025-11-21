@@ -2271,7 +2271,7 @@
       // --- SERVICE WORKER REGISTRATION ---
       async function registerServiceWorker() {
         try {
-          const reg = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          const reg = await navigator.serviceWorker.register('/docx-viewer/service-worker.js', { scope: '/' });
           console.log("Service Worker registered successfully");
           return reg;
         } catch (e) {
