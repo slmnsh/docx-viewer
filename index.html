@@ -2332,24 +2332,24 @@
           console.log("[SW Message]", type, percent || "", message || "");
           
           if (type === "download_start") {
-            if (statusText) statusText.textContent = "📥 Downloading...";
+            if (statusText) statusText.textContent = "Loading DOCX Context...";
             console.log("Downloading ECMA-376 PDF...");
           } else if (type === "download_progress") {
-            if (statusText) statusText.textContent = `📥 ${percent}%`;
+            if (statusText) statusText.textContent = `Loading DOCX Context ${percent}%`;
           } else if (type === "download_complete") {
-            if (statusText) statusText.textContent = `📥 ${(size/1024/1024).toFixed(1)}MB`;
+            if (statusText) statusText.textContent = `Loading DOCX Context 100%`;
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
           } else if (type === "extraction_start") {
-            if (statusText) statusText.textContent = "⚙️ Extracting...";
+            if (statusText) statusText.textContent = "Loading DOCX Context...";
           } else if (type === "extraction_progress") {
-            if (statusText) statusText.textContent = `⚙️ ${percent}%`;
+            if (statusText) statusText.textContent = `Loading DOCX Context ${percent}%`;
             console.log(`  Extraction: ${current}/${total} (${percent}%)`);
           } else if (type === "complete") {
             ecmaStandardContent = content;
             localStorage.setItem("ecma_standard_content", ecmaStandardContent);
             console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB ready`);
             if (indicator && statusText) {
-              statusText.textContent = "✓ Ready";
+              statusText.textContent = "✓ DOCX Context Ready";
               const spinner = indicator.querySelector(".ecma-spinner");
               if (spinner) {
                 spinner.classList.add("done");
