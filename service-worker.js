@@ -4,6 +4,15 @@ const PDF_URL = "/ecma-standard.pdf";
 
 let db = null;
 
+// Load PDF.js at top level
+try {
+  importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
+  self.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+} catch (e) {
+  console.error("Failed to load PDF.js:", e);
+}
+
 function initDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -42,18 +51,10 @@ function getAllPagesFromDB() {
 
 async function extractAndStorePDF() {
   try {
-    // Load PDF.js from CDN
-    importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
-    self.pdfjsLib.GlobalWorkerOptions.workerSrc = 
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
-
-    await initDB();
-    
-    // Fetch with download progress tracking
-    self.postMessage({ type: "download_start", message: "Downloading PDF..." });
+    self.postMessage({ type: "download_start" });
     
     const response = await fetch(PDF_URL);
-    if (!response.ok) throw new Error("PDF fetch failed");
+    if (!response.ok) throw new Error(`PDF fetch failed: ${response.status}`);
     
     const reader = response.body.getReader();
     const contentLength = +response.headers.get('content-length');
@@ -66,8 +67,10 @@ async function extractAndStorePDF() {
       chunks.push(value);
       receivedLength += value.length;
       
-      const pct = Math.round((receivedLength / contentLength) * 100);
-      self.postMessage({ type: "download_progress", current: receivedLength, total: contentLength, percent: pct });
+      if (contentLength > 0) {
+        const pct = Math.round((receivedLength / contentLength) * 100);
+        self.postMessage({ type: "download_progress", percent: pct, current: receivedLength, total: contentLength });
+      }
     }
 
     const buffer = new Uint8Array(receivedLength);
@@ -78,7 +81,11 @@ async function extractAndStorePDF() {
     }
 
     self.postMessage({ type: "download_complete", size: receivedLength });
-    self.postMessage({ type: "extraction_start", message: "Extracting PDF..." });
+    self.postMessage({ type: "extraction_start" });
+    
+    if (!self.pdfjsLib) {
+      throw new Error("PDF.js library not loaded");
+    }
     
     const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
     const totalPages = pdf.numPages;
@@ -97,7 +104,7 @@ async function extractAndStorePDF() {
           self.postMessage({ type: "extraction_progress", current: i, total: totalPages, percent: pct });
         }
       } catch (e) {
-        console.error(`SW: Page ${i} failed:`, e);
+        console.error(`Page ${i} extraction failed:`, e);
       }
     }
 
@@ -109,13 +116,19 @@ async function extractAndStorePDF() {
       size: allText.length 
     });
   } catch (error) {
+    console.error("ECMA extraction failed:", error);
     self.postMessage({ type: "error", message: error.toString() });
   }
 }
 
 self.onmessage = (event) => {
-  const { command } = event.data;
-  if (command === "extractECMA") {
-    extractAndStorePDF();
+  try {
+    const { command } = event.data;
+    if (command === "extractECMA") {
+      extractAndStorePDF();
+    }
+  } catch (e) {
+    console.error("Service Worker error:", e);
+    self.postMessage({ type: "error", message: e.toString() });
   }
 };
