@@ -138,6 +138,45 @@
         box-shadow: 0 1px 4px rgba(0, 170, 255, 0.3); /* Subtle accent shadow */
       }
 
+      /* ECMA Loading Indicator */
+      #ecmaLoadingIndicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 12px;
+        background: rgba(107, 125, 255, 0.1);
+        border: 1px solid rgba(107, 125, 255, 0.3);
+        border-radius: 6px;
+        font-size: 12px;
+        color: #6b7dff;
+        margin-right: 12px;
+        animation: fadeIn 0.3s ease;
+      }
+      #ecmaLoadingIndicator.hidden {
+        display: none;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .ecma-spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(107, 125, 255, 0.3);
+        border-top-color: #6b7dff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .ecma-spinner.done {
+        animation: none;
+        border: none;
+        font-size: 14px;
+      }
+
       /* Icons */
       .tree-icon {
         margin-right: 6px;
@@ -747,6 +786,10 @@
           <h1 class="font-bold text-lg text-[var(--text-main)]">
             DOCX Internals Viewer
           </h1>
+          <div id="ecmaLoadingIndicator" class="hidden flex items-center gap-2 ml-4 px-3 py-1 bg-[rgba(107,125,255,0.1)] border border-[rgba(107,125,255,0.3)] rounded text-xs text-[#6b7dff]">
+            <span class="ecma-spinner inline-block w-2 h-2 border-2 border-[rgba(107,125,255,0.3)] border-t-[#6b7dff] rounded-full animate-spin"></span>
+            <span id="ecmaStatusText">Loading ECMA-376...</span>
+          </div>
         </div>
         <div class="flex items-center gap-4">
           <button
@@ -2259,6 +2302,10 @@
           return;
         }
         
+        const indicator = document.getElementById("ecmaLoadingIndicator");
+        const statusText = document.getElementById("ecmaStatusText");
+        
+        if (indicator) indicator.classList.remove("hidden");
         console.log("Starting ECMA extraction in background...");
         navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
         
@@ -2266,16 +2313,25 @@
           const { type, content, pages, size, current, total, message } = event.data;
           
           if (type === "progress") {
-            if (current % 100 === 0) {
-              console.log(`  Page ${current}/${total}...`);
+            if (current % 500 === 0) {
+              const pct = Math.round((current / total) * 100);
+              if (statusText) statusText.textContent = `Extracting ${pct}%...`;
+              console.log(`  Page ${current}/${total} (${pct}%)`);
             }
           } else if (type === "complete") {
             ecmaStandardContent = content;
             localStorage.setItem("ecma_standard_content", ecmaStandardContent);
             console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB extracted`);
+            if (indicator && statusText) {
+              statusText.textContent = "✓ ECMA-376 Ready";
+              const spinner = indicator.querySelector(".ecma-spinner");
+              if (spinner) spinner.classList.add("done");
+              setTimeout(() => indicator.classList.add("hidden"), 2000);
+            }
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           } else if (type === "error") {
             console.error("ECMA extraction failed:", message);
+            if (statusText) statusText.textContent = "ECMA load failed";
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };
