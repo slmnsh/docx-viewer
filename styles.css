@@ -1,0 +1,282 @@
+
+/* ===== COMPLETE WELCOME PAGE STYLING ===== */
+
+/* Welcome section container */
+#welcomeSection {
+  background: linear-gradient(135deg, #181825 0%, #1a1a2e 50%, #181825 100%);
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero icon enhancement */
+#welcomeSection > div > div:first-child {
+  position: relative;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+#welcomeSection > div > div:first-child::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: radial-gradient(circle, rgba(0, 170, 255, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.2;
+  }
+}
+
+#welcomeSection > div > div:first-child::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border: 1px solid rgba(0, 170, 255, 0.1);
+  border-radius: 50%;
+  animation: spin 8s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Title styling */
+#welcomeSection > div h1 {
+  background: linear-gradient(135deg, #ffffff 0%, #00aaff 50%, #ffffff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  text-shadow: 0 0 30px rgba(0, 170, 255, 0.2);
+  animation: slideDown 0.6s ease-out;
+  position: relative;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Description text */
+#welcomeSection > div > p {
+  color: #b0b0c0;
+  font-size: 1.1rem;
+  line-height: 1.8;
+  animation: slideDown 0.6s ease-out 0.1s both;
+  max-width: 680px;
+}
+
+/* Start Exploring button */
+#landingUploadBtn {
+  position: relative;
+  background: linear-gradient(135deg, #00aaff 0%, #007acc 100%);
+  border: 2px solid transparent;
+  color: white;
+  padding: 14px 32px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0, 170, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  animation: slideDown 0.6s ease-out 0.2s both;
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+#landingUploadBtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+#landingUploadBtn:hover {
+  background: linear-gradient(135deg, #00c7ff 0%, #0089d9 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0, 170, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.5px;
+}
+
+#landingUploadBtn:active {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 170, 255, 0.3);
+}
+
+#landingUploadBtn .material-icons {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+#landingUploadBtn:hover .material-icons {
+  animation: bounce 0.6s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Recent documents section */
+#landingRecentContainer {
+  animation: slideUp 0.5s ease-out 0.3s both;
+}
+
+#landingRecentContainer > div:first-child {
+  border-bottom-color: rgba(0, 170, 255, 0.2);
+  transition: all 0.3s ease;
+  padding-bottom: 12px;
+}
+
+#landingRecentContainer > div:first-child h3 {
+  background: linear-gradient(135deg, #e0e0e0 0%, #00aaff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+#landingRecentContainer > div:first-child span {
+  color: #7a7a8a;
+  font-size: 0.75rem;
+}
+
+/* Feature section separator */
+#welcomeSection > div > div:last-child {
+  border-top: 1.5px solid rgba(0, 170, 255, 0.15);
+  padding-top: 32px;
+  margin-top: 24px;
+}
+
+#welcomeSection > div > div:last-child > div p {
+  color: #a0a0b0;
+  line-height: 1.7;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #welcomeSection > div h1 {
+    font-size: 2rem;
+  }
+  
+  #welcomeSection > div > p {
+    font-size: 1rem;
+  }
+  
+  #welcomeSection > div > div:last-child {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Animation for all elements in sequence */
+#welcomeSection > div > div:last-child > div {
+  animation: slideUp 0.6s ease-out calc(0.4s + var(--delay, 0s)) both;
+}
+
+#welcomeSection > div > div:last-child > div:nth-child(1) {
+  --delay: 0s;
+}
+
+#welcomeSection > div > div:last-child > div:nth-child(2) {
+  --delay: 0.1s;
+}
+
+#welcomeSection > div > div:last-child > div:nth-child(3) {
+  --delay: 0.2s;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Landing recent list grid */
+#landingRecentList {
+  animation: slideUp 0.5s ease-out 0.4s both;
+}
+
+/* Additional polish */
+#welcomeSection {
+  user-select: none;
+}
+
+/* Smooth scrolling for description if it overflows */
+#welcomeSection > div > p {
+  max-width: 100%;
+  word-break: break-word;
+}
+
