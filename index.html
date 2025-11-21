@@ -2344,11 +2344,11 @@
           } else if (type === "download_progress") {
             if (statusText) statusText.textContent = `Loading PDF ${percent}%`;
           } else if (type === "download_complete") {
-            if (statusText) statusText.textContent = "Extracting text...";
+            if (statusText) statusText.textContent = "Extracting TOC...";
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
-            // Remove listener and start extraction on main thread
+            // Remove listener and start TOC extraction on main thread
             navigator.serviceWorker.removeEventListener("message", messageHandler);
-            await extractPdfFromIndexedDB();
+            await extractTocFromIndexedDB();
           } else if (type === "error") {
             console.error("PDF download failed:", event.data.message);
             if (statusText) statusText.textContent = "❌ Load failed";
@@ -2361,7 +2361,7 @@
         navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" });
       }
       
-      async function extractPdfFromIndexedDB() {
+      async function extractTocFromIndexedDB() {
         const indicator = document.getElementById("ecmaLoadingIndicator");
         const statusText = document.getElementById("ecmaStatusText");
         
@@ -2397,20 +2397,22 @@
             throw new Error("PDF binary not found in cache");
           }
           
-          console.log("Extracting text from PDF...");
+          console.log("Extracting table of contents from first pages...");
           
-          // Extract text following Nutrient blog pattern
+          // Extract TOC from first few pages
           const pdf = window.pdfjsLib.getDocument({ data: pdfBinary });
           const pdfDoc = await pdf.promise;
           const totalPages = pdfDoc.numPages;
           
           console.log(`PDF loaded: ${totalPages} pages`);
           
-          const countPromises = [];
+          // Extract text from first 5 pages for TOC
+          const tocPages = Math.min(5, totalPages);
+          const tocPromises = [];
           
-          for (let currentPage = 1; currentPage <= totalPages; currentPage++) {
+          for (let currentPage = 1; currentPage <= tocPages; currentPage++) {
             const page = pdfDoc.getPage(currentPage);
-            countPromises.push(
+            tocPromises.push(
               page.then(function(page) {
                 const textContent = page.getTextContent();
                 return textContent.then(function(text) {
@@ -2422,20 +2424,16 @@
                 });
               })
             );
-            
-            if (currentPage % Math.max(1, Math.floor(totalPages / 10)) === 0) {
-              const pct = Math.round((currentPage / totalPages) * 100);
-              if (statusText) statusText.textContent = `Extracting text ${pct}%`;
-              console.log(`  Extracted: ${currentPage}/${totalPages} (${pct}%)`);
-            }
           }
           
-          const texts = await Promise.all(countPromises);
-          const extractedText = texts.join('\n');
+          const tocTexts = await Promise.all(tocPromises);
+          const tocContent = tocTexts.join('\n');
           
-          ecmaStandardContent = extractedText;
-          localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-          console.log(`✓ ECMA-376: ${totalPages} pages, ${(extractedText.length/1024/1024).toFixed(1)}MB ready`);
+          ecmaStandardContent = tocContent;
+          localStorage.setItem("ecma_toc", tocContent);
+          localStorage.setItem("ecma_total_pages", totalPages.toString());
+          console.log(`✓ ECMA-376 TOC: ${tocPages} pages extracted, ${(tocContent.length/1024).toFixed(1)}KB`);
+          console.log(`✓ Full PDF stored in IndexedDB: ${totalPages} pages ready for on-demand reading`);
           
           if (indicator && statusText) {
             statusText.textContent = "✓ DOCX Context Ready";
@@ -2449,6 +2447,49 @@
         } catch (error) {
           console.error("PDF extraction error:", error);
           if (statusText) statusText.textContent = "❌ Extraction failed";
+        }
+      }
+      
+      async function extractPageTextFromIndexedDB(pageNum) {
+        try {
+          if (!window.pdfjsLib) {
+            throw new Error("PDF.js not available");
+          }
+          
+          const db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open("DocxViewerECMA", 1);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => resolve(req.result);
+          });
+          
+          const pdfBinary = await new Promise((resolve) => {
+            const tx = db.transaction("pdf_binary", "readonly");
+            const req = tx.objectStore("pdf_binary").get("pdf");
+            req.onsuccess = () => resolve(req.result?.data);
+            req.onerror = () => resolve(null);
+          });
+          
+          if (!pdfBinary) {
+            throw new Error("PDF binary not found");
+          }
+          
+          const pdf = window.pdfjsLib.getDocument({ data: pdfBinary });
+          const pdfDoc = await pdf.promise;
+          
+          if (pageNum < 1 || pageNum > pdfDoc.numPages) {
+            throw new Error(`Invalid page number: ${pageNum}`);
+          }
+          
+          const page = await pdfDoc.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          return textContent.items
+            .map(function(s) {
+              return s.str;
+            })
+            .join('');
+        } catch (error) {
+          console.error(`Error extracting page ${pageNum}:`, error);
+          throw error;
         }
       }
 
