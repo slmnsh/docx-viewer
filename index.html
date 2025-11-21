@@ -936,6 +936,16 @@
             <p class="text-xs text-gray-500"><a href="https://www.anthropic.com/api" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">anthropic.com/api</a></p>
           </div>
 
+          <div class="border-t border-[var(--border)] pt-4 mt-4">
+            <h3 class="text-sm font-medium text-gray-300 mb-3">Reference File for XML Analysis</h3>
+            <div class="space-y-2">
+              <input id="referenceFileInput" type="file" accept=".txt,.md,.doc,.json" class="text-xs text-gray-400" />
+              <div id="referenceFileStatus" class="text-xs text-gray-500">
+                <p>Upload a reference file to use as context when analyzing XML locally.</p>
+              </div>
+            </div>
+          </div>
+
           <div class="flex gap-2 pt-4">
             <button id="saveLlmKeys" class="flex-1 bg-[var(--accent)] hover:bg-[#5a6dd6] text-white px-4 py-2 rounded font-medium transition">Save Keys</button>
             <button id="clearLlmKeys" class="flex-1 bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded font-medium transition">Clear All</button>
@@ -2028,7 +2038,27 @@
             if (document.getElementById("openaiKey")) document.getElementById("openaiKey").value = llmSettings.openai;
             if (document.getElementById("geminiKey")) document.getElementById("geminiKey").value = llmSettings.gemini;
             if (document.getElementById("anthropicKey")) document.getElementById("anthropicKey").value = llmSettings.anthropic;
+            // Load reference file status if exists
+            const refStatus = document.getElementById("referenceFileStatus");
+            if (refStatus) {
+              const refFile = localStorage.getItem("reference_file_name");
+              refStatus.innerHTML = refFile ? `<p class="text-green-400">✓ Reference file loaded: <strong>${refFile}</strong></p>` : '<p>Upload a reference file to use as context when analyzing XML locally.</p>';
+            }
             settingsModal.classList.remove("hidden");
+          };
+        }
+        
+        // Handle reference file input
+        const refInput = document.getElementById("referenceFileInput");
+        if (refInput) {
+          refInput.onchange = async (e) => {
+            if (e.target.files[0]) {
+              const file = e.target.files[0];
+              const text = await file.text();
+              localStorage.setItem("reference_file_content", text);
+              localStorage.setItem("reference_file_name", file.name);
+              document.getElementById("referenceFileStatus").innerHTML = `<p class="text-green-400">✓ Reference file loaded: <strong>${file.name}</strong></p>`;
+            }
           };
         }
         if (closeSettings) {
