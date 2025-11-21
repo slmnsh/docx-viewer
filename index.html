@@ -628,6 +628,13 @@
       /* Section polish */
       #welcomeSection {
         user-select: none;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 20px;
+        padding-bottom: 40px;
       }
       #welcomeSection > div > p {
         max-width: 100%;
@@ -697,7 +704,7 @@
           <!-- Landing Page / Welcome Section -->
           <div
             id="welcomeSection"
-            class="absolute inset-0 bg-[var(--bg-dark)] flex flex-col items-center justify-center z-20"
+            class="w-full bg-[var(--bg-dark)] z-20"
           >
             <div class="max-w-3xl w-full px-6 py-10 flex flex-col items-center">
               <!-- Hero -->
@@ -714,7 +721,7 @@
                 DOCX Internals Viewer
               </h1>
               <p
-                class="text-[#d0d0e0] text-center mb-12 max-w-2xl text-lg leading-relaxed font-medium"
+                class="text-[#d0d0e0] text-center mb-6 max-w-2xl text-lg leading-relaxed font-medium"
               >
                 A forensic tool for exploring the <strong>Open XML</strong> structure of Word documents. Inspect XML, view assets, and analyze the file hierarchy entirely in your browser.
               </p>
@@ -722,7 +729,7 @@
               <!-- Main Action -->
               <button
                 id="landingUploadBtn"
-                class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-10 py-4 rounded-xl font-semibold text-xl flex items-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl mb-16"
+                class="bg-[var(--accent)] hover:bg-[#007acc] text-white px-10 py-4 rounded-xl font-semibold text-xl flex items-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl mb-8"
               >
                 <span class="material-icons text-2xl">upload_file</span>
                 Start Exploring
@@ -752,7 +759,7 @@
 
               <!-- Footer Features -->
               <div
-                class="mt-6 grid grid-cols-3 gap-8 text-center w-full border-t border-[var(--border)] pt-10"
+                class="mt-4 grid grid-cols-3 gap-6 text-center w-full border-t border-[var(--border)] pt-6"
               >
                 <div>
                   <span
