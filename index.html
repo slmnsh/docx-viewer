@@ -1131,8 +1131,7 @@
         }
         
         // Generate detailed API reference style analysis
-        let analysis = `# DOCX XML API Reference\n\n`;
-        analysis += `**Elements Found:** ${Object.keys(elementMap).length}\n\n`;
+        let analysis = `**Elements Found:** ${Object.keys(elementMap).length}\n\n`;
         
         analysis += `## Elements and Attributes\n\n`;
         Object.entries(elementMap).forEach(([tagName, data]) => {
