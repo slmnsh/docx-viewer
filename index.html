@@ -30,7 +30,7 @@
         --bg-header: #2e2d4d; /* Pane/Main header background */
         --border: #4a4a6b; /* Soft, slightly purple border */
         --text-main: #e0e0e0; /* High-contrast main text */
-        --accent: #00aaff; /* Vibrant, modern blue accent */
+        --accent: #6b7dff; /* Muted purple-blue accent matching theme */
         --hover: #353456; /* Subtle hover state */
         --selected: #4b4a69; /* Clearer selected state */
         --scrollbar-color-thumb: var(--color-gray-200);
@@ -368,7 +368,7 @@
         opacity: 1;
       }
       #geminiAnalysisBox h3 {
-        background: linear-gradient(135deg, var(--accent) 0%, #0085cc 100%);
+        background: linear-gradient(135deg, var(--accent) 0%, #5a6dd6 100%);
         color: white;
         padding: 16px 18px;
         margin: 0;
@@ -413,13 +413,13 @@
         margin-bottom: 5px;
       }
       #geminiAnalysisContent code {
-        background: rgba(0, 170, 255, 0.15);
+        background: rgba(107, 125, 255, 0.15);
         padding: 2px 6px;
         border-radius: 4px;
         font-family: 'Fira Code', 'SF Mono', Monaco, monospace;
         font-size: 13px;
-        color: #5fb3f5;
-        border: 1px solid rgba(0, 170, 255, 0.2);
+        color: #9da3ff;
+        border: 1px solid rgba(107, 125, 255, 0.2);
       }
       #geminiAnalysisContent pre {
         background: #0d0d14;
@@ -436,7 +436,7 @@
         background: transparent;
         padding: 0;
         border: none;
-        color: #5fb3f5;
+        color: #9da3ff;
       }
 
       /* Recent Files Sidebar */
@@ -895,7 +895,7 @@
           </div>
 
           <div class="flex gap-2 pt-4">
-            <button id="saveLlmKeys" class="flex-1 bg-[var(--accent)] hover:bg-[#007acc] text-white px-4 py-2 rounded font-medium transition">Save Keys</button>
+            <button id="saveLlmKeys" class="flex-1 bg-[var(--accent)] hover:bg-[#5a6dd6] text-white px-4 py-2 rounded font-medium transition">Save Keys</button>
             <button id="clearLlmKeys" class="flex-1 bg-red-900 hover:bg-red-800 text-white px-4 py-2 rounded font-medium transition">Clear All</button>
           </div>
         </div>
