@@ -1065,13 +1065,6 @@
     </div>
 
     <script>
-      // --- SUPPRESS TAILWIND CDN WARNINGS ---
-      window.addEventListener('error', (e) => {
-        if (typeof e.error === 'string' && e.error.includes('cdn.tailwindcss.com')) {
-          e.preventDefault();
-        }
-      });
-
       // --- GLOBAL STATE ---
       const els = {
         mainSidebar: document.getElementById("mainSidebar"),
