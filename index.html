@@ -19,8 +19,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Showdown (Markdown) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <!-- Transformers.js for local AI -->
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
+    <!-- Puter.js for free powerful AI (GPT-4, Claude, Gemini) -->
+    <script src="https://js.puter.com/v2/"></script>
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -965,61 +965,28 @@
         window.monacoXmlFoldingRegistered = true;
       }
 
-      // --- TRANSFORMERS.JS LOCAL AI INTEGRATION ---
-      let pipelineAnalyzer = null;
-
+      // --- PUTER.JS POWERFUL AI INTEGRATION ---
       async function initializeAI() {
-        try {
-          const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers");
-          pipelineAnalyzer = await pipeline("feature-extraction", "@xenova/all-MiniLM-L6-v2");
-          console.log("Transformers.js AI loaded successfully");
-        } catch (error) {
-          console.error("Failed to load Transformers.js:", error);
-        }
+        // Puter.js initializes automatically
+        console.log("Puter.js AI integration loaded");
       }
 
-      async function analyzeXMLWithTransformers(xmlSnippet) {
-        // Parse XML to extract elements and attributes
-        const elements = {};
-        const attributes = {};
-        
-        // Extract tags
-        const tagRegex = /<([a-zA-Z:_-]+)([^>]*)>/g;
-        let match;
-        while ((match = tagRegex.exec(xmlSnippet)) !== null) {
-          const tagName = match[1];
-          const tagAttrs = match[2];
+      async function analyzeXMLWithPuter(xmlSnippet) {
+        try {
+          const systemPrompt = `You are a specialized Open XML (DOCX) and ECMA-376 schema expert. Provide a comprehensive, structured analysis of the provided XML snippet. For each unique element (tag) and attribute in the snippet, explain its purpose and its role within the DOCX document structure according to ECMA-376 standards. Use Markdown format: start with a summary, then provide '#### Elements (Tags)' and '#### Attributes' sections with detailed explanations. Be technical but clear.`;
           
-          if (!elements[tagName]) elements[tagName] = 0;
-          elements[tagName]++;
+          const userQuery = `Analyze this DOCX Open XML snippet according to ECMA-376 standards:\n\n\`\`\`xml\n${xmlSnippet}\n\`\`\`\n\nProvide detailed explanations of all elements and attributes.`;
           
-          // Extract attributes from this tag
-          const attrRegex = /([a-zA-Z:_-]+)="([^"]*)"/g;
-          let attrMatch;
-          while ((attrMatch = attrRegex.exec(tagAttrs)) !== null) {
-            const attrName = attrMatch[1];
-            if (!attributes[attrName]) attributes[attrName] = 0;
-            attributes[attrName]++;
-          }
+          const response = await puter.ai.chat(userQuery, {
+            model: "gpt-4o",
+            system: systemPrompt
+          });
+          
+          return response || "No analysis available";
+        } catch (error) {
+          console.error("Puter.js analysis error:", error);
+          throw error;
         }
-        
-        // Generate analysis
-        let analysis = `## XML Structure Analysis\n\n`;
-        analysis += `This XML snippet contains **${Object.keys(elements).length}** unique elements and **${Object.keys(attributes).length}** unique attributes.\n\n`;
-        
-        analysis += `#### Elements (Tags)\n\n`;
-        Object.entries(elements).forEach(([tag, count]) => {
-          analysis += `- **\`${tag}\`** (appears ${count}x): Part of DOCX Open XML structure\n`;
-        });
-        
-        analysis += `\n#### Attributes\n\n`;
-        Object.entries(attributes).forEach(([attr, count]) => {
-          analysis += `- **\`${attr}\`** (appears ${count}x): Attribute within DOCX elements\n`;
-        });
-        
-        analysis += `\n#### Notes\n\n- This analysis identifies the structure of your DOCX Open XML content\n- For detailed element meanings, refer to the ECMA-376 specification\n- Each element and attribute serves specific formatting or content purposes\n`;
-        
-        return analysis;
       }
 
       function showAnalysis(markdown) {
@@ -1338,12 +1305,12 @@
           els.loading.style.display = "flex";
 
           try {
-            const result = await analyzeXMLWithTransformers(selectedText);
+            const result = await analyzeXMLWithPuter(selectedText);
             showAnalysis(result);
           } catch (e) {
             console.error("XML analysis failed:", e);
             showAnalysis(
-              "**Error:** Failed to analyze XML. Please check the console for details.",
+              "**Error:** Failed to analyze XML. Make sure Puter.js is loaded. Check the console for details.",
             );
           } finally {
             els.loading.style.display = "none";
