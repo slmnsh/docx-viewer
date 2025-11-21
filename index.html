@@ -2325,38 +2325,21 @@
           console.log("✓ ECMA indicator visible");
         }
         
-        const messageHandler = (event) => {
-          const { type, content, pages, size, current, total, percent, message } = event.data;
-          console.log("[SW Message]", type, percent || "", message || "");
+        const messageHandler = async (event) => {
+          const { type, size, percent, message } = event.data;
+          console.log("[SW Message]", type, percent || "");
           
           if (type === "download_start") {
             if (statusText) statusText.textContent = "Loading DOCX Context...";
           } else if (type === "download_progress") {
             if (statusText) statusText.textContent = `Loading DOCX Context ${percent}%`;
           } else if (type === "download_complete") {
-            if (statusText) statusText.textContent = `Loading DOCX Context 100%`;
-            console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
-          } else if (type === "extraction_start") {
             if (statusText) statusText.textContent = "Loading DOCX Context...";
-          } else if (type === "extraction_progress") {
-            if (statusText) statusText.textContent = `Loading DOCX Context ${percent}%`;
-            console.log(`  Extraction: ${current}/${total} (${percent}%)`);
-          } else if (type === "complete") {
-            ecmaStandardContent = content;
-            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-            console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB ready`);
-            if (indicator && statusText) {
-              statusText.textContent = "✓ DOCX Context Ready";
-              const spinner = indicator.querySelector(".ecma-spinner");
-              if (spinner) {
-                spinner.classList.add("done");
-                spinner.textContent = "✓";
-              }
-              setTimeout(() => indicator.classList.add("hidden"), 2000);
-            }
-            navigator.serviceWorker.removeEventListener("message", messageHandler);
+            console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
+            // Now extract on main thread
+            await extractPdfFromCache();
           } else if (type === "error") {
-            console.error("ECMA extraction failed:", message);
+            console.error("PDF download failed:", message);
             if (statusText) statusText.textContent = "❌ Load failed";
             navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
@@ -2364,8 +2347,83 @@
         
         // ADD LISTENER FIRST, THEN SEND MESSAGE
         navigator.serviceWorker.addEventListener("message", messageHandler);
-        console.log("Starting ECMA extraction in background...");
-        navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
+        console.log("Starting PDF download in background...");
+        navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" });
+      }
+      
+      async function extractPdfFromCache() {
+        try {
+          const indicator = document.getElementById("ecmaLoadingIndicator");
+          const statusText = document.getElementById("ecmaStatusText");
+          
+          // Open IndexedDB and get the PDF binary
+          const db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open("DocxViewerECMA", 1);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => resolve(req.result);
+          });
+          
+          const pdfBinary = await new Promise((resolve) => {
+            const tx = db.transaction("pdf_binary", "readonly");
+            const req = tx.objectStore("pdf_binary").get("pdf");
+            req.onsuccess = () => resolve(req.result?.data);
+            req.onerror = () => resolve(null);
+          });
+          
+          if (!pdfBinary) {
+            console.error("PDF binary not found in cache");
+            return;
+          }
+          
+          // Extract text using main thread's PDF.js
+          if (!pdfjsLib) {
+            console.error("PDF.js not loaded");
+            return;
+          }
+          
+          if (statusText) statusText.textContent = "Loading DOCX Context...";
+          
+          const pdf = await pdfjsLib.getDocument({ data: pdfBinary }).promise;
+          const totalPages = pdf.numPages;
+          let extractedText = "";
+          let extractedCount = 0;
+
+          for (let i = 1; i <= totalPages; i++) {
+            try {
+              const page = await pdf.getPage(i);
+              const content = await page.getTextContent();
+              const pageText = content.items.map(item => item.str).join(" ");
+              extractedText += pageText + "\n";
+              extractedCount++;
+
+              if (i % 500 === 0) {
+                const pct = Math.round((i / totalPages) * 100);
+                if (statusText) statusText.textContent = `Loading DOCX Context ${pct}%`;
+                console.log(`  Extracted: ${i}/${totalPages} (${pct}%)`);
+              }
+            } catch (e) {
+              console.error(`Page ${i} extraction failed:`, e);
+            }
+          }
+
+          ecmaStandardContent = extractedText;
+          localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+          console.log(`✓ ECMA-376: ${extractedCount} pages, ${(extractedText.length/1024/1024).toFixed(1)}MB ready`);
+          
+          if (indicator && statusText) {
+            statusText.textContent = "✓ DOCX Context Ready";
+            const spinner = indicator.querySelector(".ecma-spinner");
+            if (spinner) {
+              spinner.classList.add("done");
+              spinner.textContent = "✓";
+            }
+            setTimeout(() => indicator.classList.add("hidden"), 2000);
+          }
+        } catch (error) {
+          console.error("PDF extraction error:", error);
+          const statusText = document.getElementById("ecmaStatusText");
+          if (statusText) statusText.textContent = "❌ Load failed";
+        }
       }
 
       // --- INIT ---

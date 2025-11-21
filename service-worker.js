@@ -1,17 +1,8 @@
 const DB_NAME = "DocxViewerECMA";
-const STORE_NAME = "pages";
+const STORE_NAME = "pdf_binary";
 const PDF_URL = "/ecma-standard.pdf";
 
 let db = null;
-
-// Load PDF.js at top level
-try {
-  importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
-  self.pdfjsLib.GlobalWorkerOptions.workerSrc = 
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
-} catch (e) {
-  console.error("Failed to load PDF.js:", e);
-}
 
 function initDB() {
   return new Promise((resolve, reject) => {
@@ -22,34 +13,14 @@ function initDB() {
       resolve(db);
     };
     req.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(STORE_NAME, { keyPath: "pageNum" });
+      if (!e.target.result.objectStoreNames.contains(STORE_NAME)) {
+        e.target.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
     };
   });
 }
 
-function savePageToDB(pageNum, text) {
-  return new Promise((resolve) => {
-    if (!db) return resolve();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ pageNum, text });
-    tx.oncomplete = () => resolve();
-  });
-}
-
-function getAllPagesFromDB() {
-  return new Promise((resolve) => {
-    if (!db) return resolve("");
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const req = tx.objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => {
-      const pages = req.result.sort((a, b) => a.pageNum - b.pageNum);
-      resolve(pages.map(p => p.text).join("\n"));
-    };
-    req.onerror = () => resolve("");
-  });
-}
-
-async function extractAndStorePDF() {
+async function downloadPDF() {
   try {
     self.postMessage({ type: "download_start" });
     
@@ -69,7 +40,7 @@ async function extractAndStorePDF() {
       
       if (contentLength > 0) {
         const pct = Math.round((receivedLength / contentLength) * 100);
-        self.postMessage({ type: "download_progress", percent: pct, current: receivedLength, total: contentLength });
+        self.postMessage({ type: "download_progress", percent: pct });
       }
     }
 
@@ -80,43 +51,19 @@ async function extractAndStorePDF() {
       position += chunk.length;
     }
 
-    self.postMessage({ type: "download_complete", size: receivedLength });
-    self.postMessage({ type: "extraction_start" });
+    // Save binary to IndexedDB
+    await initDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put({ id: "pdf", data: buffer });
     
-    if (!self.pdfjsLib) {
-      throw new Error("PDF.js library not loaded");
-    }
-    
-    const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
-    const totalPages = pdf.numPages;
-    let extractedCount = 0;
-
-    for (let i = 1; i <= totalPages; i++) {
-      try {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const text = content.items.map(item => item.str).join(" ");
-        await savePageToDB(i, text);
-        extractedCount++;
-
-        if (i % 500 === 0) {
-          const pct = Math.round((i / totalPages) * 100);
-          self.postMessage({ type: "extraction_progress", current: i, total: totalPages, percent: pct });
-        }
-      } catch (e) {
-        console.error(`Page ${i} extraction failed:`, e);
-      }
-    }
-
-    const allText = await getAllPagesFromDB();
-    self.postMessage({ 
-      type: "complete", 
-      content: allText,
-      pages: extractedCount,
-      size: allText.length 
+    await new Promise((resolve) => {
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
     });
+
+    self.postMessage({ type: "download_complete", size: receivedLength });
   } catch (error) {
-    console.error("ECMA extraction failed:", error);
+    console.error("PDF download failed:", error);
     self.postMessage({ type: "error", message: error.toString() });
   }
 }
@@ -124,8 +71,8 @@ async function extractAndStorePDF() {
 self.onmessage = (event) => {
   try {
     const { command } = event.data;
-    if (command === "extractECMA") {
-      extractAndStorePDF();
+    if (command === "downloadPDF") {
+      downloadPDF();
     }
   } catch (e) {
     console.error("Service Worker error:", e);
