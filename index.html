@@ -27,8 +27,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <!-- Transformers.js for local AI -->
     <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
-    <!-- PDF.js for reading ECMA-376 Standard -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -1048,14 +1046,6 @@
             </p>
           </div>
 
-          <div class="border-t border-[var(--border)] pt-4 mt-4">
-            <h3 class="text-sm font-medium text-gray-300 mb-3">ECMA-376 Standard PDF</h3>
-            <input id="pdfFileInput" type="file" accept=".pdf" class="w-full text-xs text-gray-400" />
-            <div id="pdfFileStatus" class="text-xs text-gray-500 mt-2">
-              <p>Upload the ECMA-376 OpenXML Standard PDF as context for local analysis.</p>
-            </div>
-          </div>
-
           <div class="flex gap-2 pt-4">
             <button
               id="saveLlmKeys"
@@ -1103,7 +1093,6 @@
       let fileCache = {}; // In-memory cache of text/blobs
       let currentDocName = "";
       let blobUrls = []; // Array to track image Blob URLs for cleanup
-      let ecmaStandardContent = ""; // Store extracted ECMA-376 PDF content
 
       // Function to safely escape HTML special characters
       const escapeHtml = (str) => {
@@ -2172,24 +2161,6 @@
         if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
       });
 
-      // --- PDF EXTRACTION FUNCTION ---
-      async function extractPdfText(file) {
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let text = "";
-          for (let i = 1; i <= Math.min(pdf.numPages, 50); i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            text += content.items.map(item => item.str).join(" ") + "\n";
-          }
-          return text;
-        } catch (e) {
-          console.error("PDF extraction error:", e);
-          return "";
-        }
-      }
-
       // --- INIT ---
       // --- SETTINGS MODAL ---
       try {
@@ -2198,28 +2169,6 @@
         const closeSettings = document.getElementById("closeSettings");
         const saveLlmKeys = document.getElementById("saveLlmKeys");
         const clearLlmKeys = document.getElementById("clearLlmKeys");
-        const pdfFileInput = document.getElementById("pdfFileInput");
-        const pdfFileStatus = document.getElementById("pdfFileStatus");
-        
-        // Handle PDF upload
-        if (pdfFileInput) {
-          pdfFileInput.onchange = async (e) => {
-            if (e.target.files[0]) {
-              const file = e.target.files[0];
-              pdfFileStatus.innerHTML = '<p class="text-blue-400">Extracting PDF...</p>';
-              ecmaStandardContent = await extractPdfText(file);
-              const charCount = ecmaStandardContent.length;
-              localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-              localStorage.setItem("ecma_standard_name", file.name);
-              pdfFileStatus.innerHTML = `<p class="text-green-400">✓ Standard loaded: ${file.name} (${(charCount/1000).toFixed(0)}KB)</p>`;
-            }
-          };
-          // Load from storage on modal open
-          if (localStorage.getItem("ecma_standard_name")) {
-            ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
-            pdfFileStatus.innerHTML = `<p class="text-green-400">✓ Standard loaded: ${localStorage.getItem("ecma_standard_name")}</p>`;
-          }
-        }
 
         if (settingsBtn) {
           settingsBtn.onclick = () => {
