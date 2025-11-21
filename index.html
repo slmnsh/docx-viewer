@@ -1100,6 +1100,8 @@
       let fileCache = {}; // In-memory cache of text/blobs
       let currentDocName = "";
       let blobUrls = []; // Array to track image Blob URLs for cleanup
+      let ecmaWorker = null;
+      let ecmaStandardContent = "";
 
       // Function to safely escape HTML special characters
       const escapeHtml = (str) => {
@@ -2207,62 +2209,67 @@
         if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
       });
 
-      // --- PDF EXTRACTION & AUTO-LOAD ECMA STANDARD ---
-      async function extractPdfText(arrayBuffer) {
-        try {
-          if (!pdfjsLib) {
-            console.warn("PDF.js not loaded");
-            return "";
-          }
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let text = "";
-          const maxPages = Math.min(pdf.numPages, 100);
-          console.log("Extracting text from " + maxPages + " pages...");
-          for (let i = 1; i <= maxPages; i++) {
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            const pageText = content.items.map(item => item.str).join(" ");
-            text += pageText + "\n";
-          }
-          console.log("✓ Extracted " + text.length + " characters from PDF");
-          return text;
-        } catch (e) {
-          console.error("PDF extraction error:", e?.message || e);
-          return "";
-        }
-      }
-      
+      // --- SERVICE WORKER & ECMA STANDARD ---
       async function autoLoadEcmaStandard() {
         try {
           if (localStorage.getItem("ecma_standard_content")) {
             ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
-            console.log("✓ ECMA standard loaded from cache (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
+            console.log("✓ ECMA standard loaded from cache (" + (ecmaStandardContent.length/1024/1024).toFixed(1) + "MB)");
             return;
           }
           
-          console.log("Loading ECMA-376 Standard from /ecma-standard.pdf...");
-          
-          const response = await fetch("/ecma-standard.pdf");
-          if (!response.ok) {
-            console.warn("PDF fetch failed:", response.status);
+          if (!('serviceWorker' in navigator)) {
+            console.warn("Service Workers not supported");
             return;
           }
           
-          const pdfData = await response.arrayBuffer();
-          console.log("PDF downloaded: " + (pdfData.byteLength/1024/1024).toFixed(1) + "MB");
+          console.log("Registering Service Worker for ECMA extraction...");
+          ecmaWorker = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          console.log("Service Worker registered");
           
-          const extracted = await extractPdfText(pdfData);
-          if (extracted && extracted.length > 0) {
-            ecmaStandardContent = extracted;
-            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-            localStorage.setItem("ecma_standard_name", "ECMA-376");
-            console.log("✓ ECMA-376 cached: " + (ecmaStandardContent.length/1000).toFixed(0) + "KB");
+          const controller = ecmaWorker.active || ecmaWorker.installing;
+          if (!controller) {
+            ecmaWorker.onupdatefound = () => {
+              const newWorker = ecmaWorker.installing;
+              newWorker.onstatechange = () => {
+                if (newWorker.state === 'activated') {
+                  startEcmaExtraction();
+                }
+              };
+            };
           } else {
-            console.warn("PDF extraction returned empty");
+            startEcmaExtraction();
           }
         } catch (e) {
-          console.error("ECMA autoload error:", e?.message || e);
+          console.warn("ECMA autoload error:", e?.message || "Unknown error");
         }
+      }
+
+      function startEcmaExtraction() {
+        if (!ecmaWorker.controller) {
+          console.warn("No active Service Worker");
+          return;
+        }
+        
+        console.log("Starting PDF extraction in Service Worker...");
+        ecmaWorker.controller.postMessage({ command: "extractECMA" });
+        
+        navigator.serviceWorker.onmessage = (event) => {
+          const { type, content, pages, size, current, total, message } = event.data;
+          
+          if (type === "progress") {
+            console.log(`Extracting page ${current}/${total}...`);
+          } else if (type === "complete") {
+            ecmaStandardContent = content;
+            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+            console.log(`✓ ECMA-376 extracted: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB`);
+          } else if (type === "error") {
+            console.error("PDF extraction error:", message);
+          } else if (type === "ready") {
+            ecmaStandardContent = content;
+            console.log(`✓ ECMA-376 loaded from IndexedDB: ${(content.length/1024/1024).toFixed(1)}MB`);
+          }
+        };
       }
 
       // --- INIT ---
@@ -2361,7 +2368,9 @@
         splitManager.init(els.editorWrapper);
         await loadMonaco();
         await initializeAI();
-        await autoLoadEcmaStandard(); // Load ECMA-376 standard for context
+        
+        // Start ECMA loading in background (non-blocking)
+        autoLoadEcmaStandard();
 
         splitManager.panes.forEach((p) => {
           if (!p.editor && p.editorContainer.style.display !== "none") {
