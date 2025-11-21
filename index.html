@@ -27,6 +27,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <!-- Transformers.js for local AI -->
     <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers"></script>
+    <!-- PDF.js for ECMA-376 Standard extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js"></script>
+    <script>
+      if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js';
+      }
+    </script>
 
     <style>
       /* --- NEW POLISHED THEME --- */
@@ -1286,14 +1293,17 @@
       }
 
       function findEcmaDefinition(term) {
-        if (!ecmaStandardContent) return null;
-        const searchTerm = term.toLowerCase();
-        const lines = ecmaStandardContent.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes(searchTerm)) {
-            const context = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 3)).join(" ");
-            return context.substring(0, 200);
+        if (!ecmaStandardContent || ecmaStandardContent.length === 0) return null;
+        try {
+          const searchTerm = term.toLowerCase();
+          const idx = ecmaStandardContent.toLowerCase().indexOf(searchTerm);
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 100);
+            const end = Math.min(ecmaStandardContent.length, idx + 300);
+            return ecmaStandardContent.substring(start, end);
           }
+        } catch (e) {
+          // Silent fail
         }
         return null;
       }
@@ -1332,8 +1342,9 @@
 
         // Generate detailed API reference style analysis with ECMA context
         let analysis = `**Elements Found:** ${Object.keys(elementMap).length}\n\n`;
-        if (ecmaStandardContent) {
-          analysis += `✓ Analysis enhanced with ECMA-376 Standard reference\n\n`;
+        const hasEcma = ecmaStandardContent && ecmaStandardContent.length > 1000;
+        if (hasEcma) {
+          analysis += `✓ **Enhanced with ECMA-376 Standard context** (${(ecmaStandardContent.length/1024/1024).toFixed(1)}MB)\n\n`;
         }
 
         analysis += `## Elements and Attributes\n\n`;
@@ -1342,25 +1353,31 @@
           analysis += `- **Occurrences:** ${data.count}x\n`;
           
           // Try to find ECMA definition
-          const ecmaDef = findEcmaDefinition(tagName);
-          if (ecmaDef) {
-            analysis += `- **ECMA-376 Reference:** ${ecmaDef}...\n`;
+          if (hasEcma) {
+            const ecmaDef = findEcmaDefinition(tagName);
+            if (ecmaDef) {
+              analysis += `- **ECMA-376 Reference:** "${ecmaDef.substring(0, 150)}..."\n`;
+            } else {
+              analysis += `- **Category:** ECMA-376 Part 1 element\n`;
+            }
           } else {
-            analysis += `- **Purpose:** ECMA-376 Part 1 element\n`;
+            analysis += `- **Type:** ECMA-376 element\n`;
           }
 
           if (Object.keys(data.attributes).length > 0) {
             analysis += `- **Attributes:**\n`;
             Object.entries(data.attributes).forEach(([attrName, values]) => {
-              const attrDef = findEcmaDefinition(attrName);
-              analysis += `  - **${attrName}**: ${attrDef ? attrDef.substring(0, 100) + "..." : "ECMA-376 property"}\n`;
+              if (hasEcma) {
+                const attrDef = findEcmaDefinition(attrName);
+                const desc = attrDef ? `"${attrDef.substring(0, 80)}..."` : "ECMA-376 attribute";
+                analysis += `  - **${attrName}**: ${desc}\n`;
+              } else {
+                analysis += `  - **${attrName}**: ECMA-376 attribute\n`;
+              }
               if (values.length <= 5) {
                 analysis += `    - Values: ${values.map((v) => `\`${v}\``).join(", ")}\n`;
               } else {
-                analysis += `    - Sample values: ${values
-                  .slice(0, 3)
-                  .map((v) => `\`${v}\``)
-                  .join(", ")} (+ ${values.length - 3} more)\n`;
+                analysis += `    - Sample values: ${values.slice(0, 3).map((v) => `\`${v}\``).join(", ")} (+ ${values.length - 3} more)\n`;
               }
             });
           }
@@ -1368,10 +1385,10 @@
         });
 
         analysis += `## Reference\n\n`;
-        analysis += `- Standard: ECMA-376 Office Open XML (5th Edition)\n`;
-        analysis += `- Spec: https://www.ecma-international.org/publications-and-standards/standards/ecma-376/\n`;
-        if (ecmaStandardContent) {
-          analysis += `- Status: ✓ Full standard loaded (${(ecmaStandardContent.length/1000).toFixed(0)}KB)\n`;
+        analysis += `- **Standard:** ECMA-376 Office Open XML (5th Edition December 2016)\n`;
+        analysis += `- **Documentation:** https://www.ecma-international.org/publications-and-standards/standards/ecma-376/\n`;
+        if (hasEcma) {
+          analysis += `- **Status:** ✓ Full specification loaded and indexed\n`;
         }
 
         return { content: analysis, model: "Local XML Parser" };
@@ -2193,16 +2210,24 @@
       // --- PDF EXTRACTION & AUTO-LOAD ECMA STANDARD ---
       async function extractPdfText(arrayBuffer) {
         try {
+          if (!pdfjsLib) {
+            console.warn("PDF.js not loaded");
+            return "";
+          }
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
           let text = "";
-          for (let i = 1; i <= Math.min(pdf.numPages, 100); i++) {
+          const maxPages = Math.min(pdf.numPages, 100);
+          console.log("Extracting text from " + maxPages + " pages...");
+          for (let i = 1; i <= maxPages; i++) {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
-            text += content.items.map(item => item.str).join(" ") + "\n";
+            const pageText = content.items.map(item => item.str).join(" ");
+            text += pageText + "\n";
           }
+          console.log("✓ Extracted " + text.length + " characters from PDF");
           return text;
         } catch (e) {
-          console.error("PDF extraction error:", e);
+          console.error("PDF extraction error:", e?.message || e);
           return "";
         }
       }
@@ -2211,28 +2236,32 @@
         try {
           if (localStorage.getItem("ecma_standard_content")) {
             ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
-            console.log("✓ ECMA standard loaded from browser cache (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
+            console.log("✓ ECMA standard loaded from cache (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
             return;
           }
           
-          console.log("Loading ECMA-376 Standard from local server...");
+          console.log("Loading ECMA-376 Standard from /ecma-standard.pdf...");
           
-          // Fetch local PDF
           const response = await fetch("/ecma-standard.pdf");
           if (!response.ok) {
-            console.warn("Local PDF not available");
+            console.warn("PDF fetch failed:", response.status);
             return;
           }
           
           const pdfData = await response.arrayBuffer();
-          console.log("✓ PDF loaded (" + (pdfData.byteLength/1024/1024).toFixed(0) + "MB), extracting text...");
+          console.log("PDF downloaded: " + (pdfData.byteLength/1024/1024).toFixed(1) + "MB");
           
-          ecmaStandardContent = await extractPdfText(pdfData);
-          localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-          localStorage.setItem("ecma_standard_name", "ECMA-376-1_5th_edition");
-          console.log("✓ ECMA-376 Standard loaded and cached (" + (ecmaStandardContent.length/1000).toFixed(0) + "KB)");
+          const extracted = await extractPdfText(pdfData);
+          if (extracted && extracted.length > 0) {
+            ecmaStandardContent = extracted;
+            localStorage.setItem("ecma_standard_content", ecmaStandardContent);
+            localStorage.setItem("ecma_standard_name", "ECMA-376");
+            console.log("✓ ECMA-376 cached: " + (ecmaStandardContent.length/1000).toFixed(0) + "KB");
+          } else {
+            console.warn("PDF extraction returned empty");
+          }
         } catch (e) {
-          console.warn("ECMA standard load skipped:", e?.message || "Unknown error");
+          console.error("ECMA autoload error:", e?.message || e);
         }
       }
 
