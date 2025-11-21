@@ -23,7 +23,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npx -y http-server -p 5000 -c-1"
+args = "npx -y http-server . -p 5000 -c-1"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
