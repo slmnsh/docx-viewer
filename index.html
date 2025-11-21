@@ -2335,11 +2335,7 @@
           console.log("✓ ECMA indicator visible");
         }
         
-        // Create a MessageChannel for bidirectional communication
-        const channel = new MessageChannel();
-        const port1 = channel.port1;
-        const port2 = channel.port2;
-        
+        // Listen for messages from the service worker
         const messageHandler = async (event) => {
           const { type, size, percent, message } = event.data;
           console.log("[SW Message]", type, percent || "");
@@ -2353,18 +2349,20 @@
             console.log(`✓ PDF downloaded: ${(size/1024/1024).toFixed(1)}MB`);
             // Now extract on main thread
             await extractPdfFromCache();
+            // Remove listener after download is complete
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
           } else if (type === "error") {
             console.error("PDF download failed:", message);
             if (statusText) statusText.textContent = "❌ Load failed";
-            port1.close();
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };
         
-        port1.onmessage = messageHandler;
-        port1.start();
+        // Listen for all messages from service worker
+        navigator.serviceWorker.addEventListener("message", messageHandler);
         
         console.log("Starting PDF download in background...");
-        navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" }, [port2]);
+        navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" });
       }
       
       async function extractPdfFromCache() {
