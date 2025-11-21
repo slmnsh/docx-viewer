@@ -19,9 +19,9 @@ function initDB() {
   });
 }
 
-async function downloadPDF() {
+async function downloadPDF(client) {
   try {
-    self.postMessage({ type: "download_start" });
+    client.postMessage({ type: "download_start" });
     const response = await fetch(PDF_URL);
     if (!response.ok) throw new Error(`PDF fetch failed: ${response.status}`);
     
@@ -37,7 +37,7 @@ async function downloadPDF() {
       receivedLength += value.length;
       if (contentLength > 0) {
         const pct = Math.round((receivedLength / contentLength) * 100);
-        self.postMessage({ type: "download_progress", percent: pct });
+        client.postMessage({ type: "download_progress", percent: pct });
       }
     }
 
@@ -57,10 +57,10 @@ async function downloadPDF() {
       tx.onerror = resolve;
     });
 
-    self.postMessage({ type: "download_complete", size: receivedLength });
+    client.postMessage({ type: "download_complete", size: receivedLength });
   } catch (error) {
     console.error("PDF download failed:", error);
-    self.postMessage({ type: "error", message: error.toString() });
+    client.postMessage({ type: "error", message: error.toString() });
   }
 }
 
@@ -68,10 +68,12 @@ self.onmessage = (event) => {
   try {
     const { command } = event.data;
     if (command === "downloadPDF") {
-      downloadPDF();
+      downloadPDF(event.ports[0] || event.source);
     }
   } catch (e) {
     console.error("Service Worker error:", e);
-    self.postMessage({ type: "error", message: e.toString() });
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ type: "error", message: e.toString() });
+    }
   }
 };

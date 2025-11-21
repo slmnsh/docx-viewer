@@ -2335,6 +2335,11 @@
           console.log("✓ ECMA indicator visible");
         }
         
+        // Create a MessageChannel for bidirectional communication
+        const channel = new MessageChannel();
+        const port1 = channel.port1;
+        const port2 = channel.port2;
+        
         const messageHandler = async (event) => {
           const { type, size, percent, message } = event.data;
           console.log("[SW Message]", type, percent || "");
@@ -2351,14 +2356,15 @@
           } else if (type === "error") {
             console.error("PDF download failed:", message);
             if (statusText) statusText.textContent = "❌ Load failed";
-            navigator.serviceWorker.removeEventListener("message", messageHandler);
+            port1.close();
           }
         };
         
-        // ADD LISTENER FIRST, THEN SEND MESSAGE
-        navigator.serviceWorker.addEventListener("message", messageHandler);
+        port1.onmessage = messageHandler;
+        port1.start();
+        
         console.log("Starting PDF download in background...");
-        navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" });
+        navigator.serviceWorker.controller.postMessage({ command: "downloadPDF" }, [port2]);
       }
       
       async function extractPdfFromCache() {
