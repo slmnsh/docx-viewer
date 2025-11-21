@@ -2370,6 +2370,13 @@ self.onmessage = (event) => {
             return;
           }
           
+          // Check if we're in Replit iframe environment - service workers don't work with blob URLs there
+          const isReplitIframe = window.self !== window.top;
+          if (isReplitIframe) {
+            console.log("Running in iframe environment - skipping Service Worker for ECMA (not fully supported)");
+            return;
+          }
+          
           console.log("Registering inline Service Worker...");
           const reg = await registerInlineServiceWorker();
           
@@ -2394,7 +2401,7 @@ self.onmessage = (event) => {
             startEcmaExtraction();
           }
         } catch (e) {
-          console.warn("ECMA autoload error:", e?.message || "Unknown error");
+          console.log("ECMA autoload: " + (e?.message || "Service Worker not available in this environment"));
         }
       }
 
