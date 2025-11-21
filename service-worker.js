@@ -4,7 +4,6 @@ const PDF_URL = "/ecma-standard.pdf";
 
 let db = null;
 
-// Initialize IndexedDB
 function initDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -14,34 +13,20 @@ function initDB() {
       resolve(db);
     };
     req.onupgradeneeded = (e) => {
-      const store = e.target.result.createObjectStore(STORE_NAME, { keyPath: "pageNum" });
-      store.createIndex("pageNum", "pageNum", { unique: true });
+      e.target.result.createObjectStore(STORE_NAME, { keyPath: "pageNum" });
     };
   });
 }
 
-// Get page from IndexedDB
-function getPageFromDB(pageNum) {
-  return new Promise((resolve) => {
-    if (!db) return resolve(null);
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const req = tx.objectStore(STORE_NAME).get(pageNum);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
-  });
-}
-
-// Save page to IndexedDB
 function savePageToDB(pageNum, text) {
   return new Promise((resolve) => {
     if (!db) return resolve();
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put({ pageNum, text, timestamp: Date.now() });
+    tx.objectStore(STORE_NAME).put({ pageNum, text });
     tx.oncomplete = () => resolve();
   });
 }
 
-// Get all pages from IndexedDB
 function getAllPagesFromDB() {
   return new Promise((resolve) => {
     if (!db) return resolve("");
@@ -55,18 +40,15 @@ function getAllPagesFromDB() {
   });
 }
 
-// Extract PDF and store pages
 async function extractAndStorePDF() {
   try {
-    if (!self.pdfjsLib) {
-      self.importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
-    }
-    
+    // Load PDF.js from CDN
+    importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.js");
     self.pdfjsLib.GlobalWorkerOptions.workerSrc = 
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
 
     await initDB();
-
+    
     const response = await fetch(PDF_URL);
     const buffer = await response.arrayBuffer();
     const pdf = await self.pdfjsLib.getDocument({ data: buffer }).promise;
@@ -75,15 +57,6 @@ async function extractAndStorePDF() {
     let extractedCount = 0;
 
     for (let i = 1; i <= totalPages; i++) {
-      const cached = await getPageFromDB(i);
-      if (cached) {
-        extractedCount++;
-        if (i % 10 === 0) {
-          self.postMessage({ type: "progress", current: i, total: totalPages });
-        }
-        continue;
-      }
-
       try {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
@@ -91,11 +64,11 @@ async function extractAndStorePDF() {
         await savePageToDB(i, text);
         extractedCount++;
 
-        if (i % 10 === 0) {
+        if (i % 100 === 0) {
           self.postMessage({ type: "progress", current: i, total: totalPages });
         }
       } catch (e) {
-        console.error(`Failed to extract page ${i}:`, e);
+        console.error(`SW: Page ${i} failed:`, e);
       }
     }
 
@@ -107,19 +80,13 @@ async function extractAndStorePDF() {
       size: allText.length 
     });
   } catch (error) {
-    self.postMessage({ type: "error", message: error.message });
+    self.postMessage({ type: "error", message: error.toString() });
   }
 }
 
-// Message handler
 self.onmessage = (event) => {
   const { command } = event.data;
-  
   if (command === "extractECMA") {
     extractAndStorePDF();
-  } else if (command === "getECMA") {
-    initDB().then(() => getAllPagesFromDB()).then(content => {
-      self.postMessage({ type: "ready", content });
-    });
   }
 };

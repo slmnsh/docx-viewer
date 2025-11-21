@@ -2214,7 +2214,7 @@
         try {
           if (localStorage.getItem("ecma_standard_content")) {
             ecmaStandardContent = localStorage.getItem("ecma_standard_content") || "";
-            console.log("✓ ECMA standard loaded from cache (" + (ecmaStandardContent.length/1024/1024).toFixed(1) + "MB)");
+            console.log("✓ ECMA loaded from localStorage (" + (ecmaStandardContent.length/1024/1024).toFixed(1) + "MB)");
             return;
           }
           
@@ -2224,20 +2224,28 @@
           }
           
           console.log("Registering Service Worker for ECMA extraction...");
-          ecmaWorker = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          const reg = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
           console.log("Service Worker registered");
           
-          const controller = ecmaWorker.active || ecmaWorker.installing;
+          // Wait for active controller or registration update
+          let controller = reg.active || reg.controller;
           if (!controller) {
-            ecmaWorker.onupdatefound = () => {
-              const newWorker = ecmaWorker.installing;
-              newWorker.onstatechange = () => {
-                if (newWorker.state === 'activated') {
-                  startEcmaExtraction();
-                }
+            await new Promise((resolve) => {
+              reg.onupdatefound = () => {
+                const worker = reg.installing;
+                worker.onstatechange = () => {
+                  if (worker.state === 'activated') {
+                    controller = reg.active;
+                    resolve();
+                  }
+                };
               };
-            };
-          } else {
+              // Timeout if activation takes too long
+              setTimeout(resolve, 3000);
+            });
+          }
+          
+          if (navigator.serviceWorker.controller) {
             startEcmaExtraction();
           }
         } catch (e) {
@@ -2246,30 +2254,33 @@
       }
 
       function startEcmaExtraction() {
-        if (!ecmaWorker.controller) {
-          console.warn("No active Service Worker");
+        if (!navigator.serviceWorker.controller) {
+          console.warn("No active Service Worker controller");
           return;
         }
         
-        console.log("Starting PDF extraction in Service Worker...");
-        ecmaWorker.controller.postMessage({ command: "extractECMA" });
+        console.log("Starting ECMA extraction in background...");
+        navigator.serviceWorker.controller.postMessage({ command: "extractECMA" });
         
-        navigator.serviceWorker.onmessage = (event) => {
+        const messageHandler = (event) => {
           const { type, content, pages, size, current, total, message } = event.data;
           
           if (type === "progress") {
-            console.log(`Extracting page ${current}/${total}...`);
+            if (current % 100 === 0) {
+              console.log(`  Page ${current}/${total}...`);
+            }
           } else if (type === "complete") {
             ecmaStandardContent = content;
             localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-            console.log(`✓ ECMA-376 extracted: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB`);
+            console.log(`✓ ECMA-376: ${pages} pages, ${(size/1024/1024).toFixed(1)}MB extracted`);
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
           } else if (type === "error") {
-            console.error("PDF extraction error:", message);
-          } else if (type === "ready") {
-            ecmaStandardContent = content;
-            console.log(`✓ ECMA-376 loaded from IndexedDB: ${(content.length/1024/1024).toFixed(1)}MB`);
+            console.error("ECMA extraction failed:", message);
+            navigator.serviceWorker.removeEventListener("message", messageHandler);
           }
         };
+        
+        navigator.serviceWorker.addEventListener("message", messageHandler);
       }
 
       // --- INIT ---
@@ -2283,19 +2294,12 @@
         const pdfFileInput = document.getElementById("pdfFileInput");
         const pdfFileStatus = document.getElementById("pdfFileStatus");
         
-        // Handle manual PDF upload override
+        // Handle manual PDF upload override (disabled - using Service Worker)
         if (pdfFileInput) {
-          pdfFileInput.onchange = async (e) => {
-            if (e.target.files[0]) {
-              const file = e.target.files[0];
-              pdfFileStatus.innerHTML = '<p class="text-blue-400">Extracting PDF...</p>';
-              const arrayBuffer = await file.arrayBuffer();
-              ecmaStandardContent = await extractPdfText(arrayBuffer);
-              localStorage.setItem("ecma_standard_content", ecmaStandardContent);
-              localStorage.setItem("ecma_standard_name", file.name);
-              pdfFileStatus.innerHTML = `<p class="text-green-400">✓ Standard loaded: ${file.name}</p>`;
-            }
-          };
+          pdfFileInput.disabled = true;
+        }
+        if (pdfFileStatus) {
+          pdfFileStatus.innerHTML = '<p class="text-gray-400">Extracting ECMA-376 automatically...</p>';
         }
 
         if (settingsBtn) {
